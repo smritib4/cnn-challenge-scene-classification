@@ -16,28 +16,33 @@ import re
 from pathlib import Path
 
 CSS = """
-@page {{ size: letter; margin: 0.55in 0.6in; }}
+@page {{ size: letter; margin: 0.7in 0.75in; }}
 * {{ box-sizing: border-box; }}
 body {{
   font-family: "Segoe UI", Calibri, Helvetica, Arial, sans-serif;
-  font-size: {pt}pt; line-height: 1.34; color: #111; margin: 0;
+  font-size: {pt}pt; line-height: 1.34; color: #1a1a1a; margin: 0;
   -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }}
-h1 {{ font-size: {h1}pt; margin: 0 0 2pt; line-height: 1.2; }}
-h2 {{ font-size: {h2}pt; margin: 9pt 0 3pt; padding-bottom: 1pt;
-      border-bottom: 0.6pt solid #bbb; page-break-after: avoid; }}
-p {{ margin: 0 0 4pt; text-align: justify; }}
-ol, ul {{ margin: 0 0 4pt; padding-left: 15pt; }}
-li {{ margin-bottom: 2.5pt; }}
-code {{ font-family: Consolas, "Courier New", monospace; font-size: 0.88em;
-        background: #f2f2f2; padding: 0 1.5pt; border-radius: 2pt; }}
-table {{ border-collapse: collapse; width: 100%; margin: 3pt 0 5pt;
-         font-size: 0.855em; page-break-inside: avoid; }}
-th, td {{ border: 0.5pt solid #b8b8b8; padding: 1.7pt 3pt; vertical-align: top; }}
-th {{ background: #ededed; text-align: left; font-weight: 600; }}
+h1 {{ font-size: {h1}pt; margin: 0 0 3pt; line-height: 1.2; color: #14304d;
+      font-weight: 600; letter-spacing: -0.2pt; }}
+h2 {{ font-size: {h2}pt; margin: 10pt 0 4pt; color: #14304d; font-weight: 600;
+      padding-bottom: 2pt; border-bottom: 1pt solid #c9d6e2;
+      page-break-after: avoid; }}
+p {{ margin: 0 0 6pt; }}
+ol, ul {{ margin: 0 0 6pt; padding-left: 16pt; }}
+li {{ margin-bottom: 4pt; }}
+code {{ font-family: Consolas, "Courier New", monospace; font-size: 0.87em;
+        background: #f1f4f7; padding: 0.5pt 2pt; border-radius: 2pt; }}
+table {{ border-collapse: collapse; width: 100%; margin: 6pt 0 9pt;
+         font-size: 0.93em; page-break-inside: avoid; }}
+th, td {{ border-bottom: 0.5pt solid #d8dee5; padding: 3.2pt 5pt;
+          vertical-align: top; }}
+th {{ border-bottom: 1pt solid #8fa5b8; text-align: left; font-weight: 600;
+      color: #14304d; }}
 td.r, th.r {{ text-align: right; }}
-hr {{ border: none; border-top: 0.6pt solid #ccc; margin: 6pt 0 4pt; }}
-.subtitle {{ margin-bottom: 6pt; }}
+tr:first-child td {{ border-top: 0; }}
+hr {{ border: none; border-top: 0.6pt solid #ccc; margin: 8pt 0 6pt; }}
+.subtitle {{ margin-bottom: 11pt; color: #444; }}
 """
 
 
