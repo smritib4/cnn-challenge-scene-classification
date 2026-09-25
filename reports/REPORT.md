@@ -60,6 +60,10 @@ Two numbers means I ran the same config twice at the same seed.
 | 06 | + strong augmentation | augmentation only | 23.5M | 94.38 |
 | — | **Final: ConvNeXt-Tiny** | family + EMA + flip TTA | 27.8M | **95.63** |
 
+Every number in that column is **validation** accuracy, since that is what selection
+used. Only the two selected checkpoints were scored on the test set: experiment 5 got
+94.25%, and the final model got **96.75%**.
+
 **The most useful thing I measured was my own noise floor.** Running one config twice at
 the *same* seed gave 94.58% and 93.96% — 0.62 points apart, or 3 of 480 images. Same-seed
 GPU runs are not identical because cuDNN picks convolution algorithms by timing. That
