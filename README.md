@@ -8,9 +8,9 @@ images. The provided starter is a single-convolution network on grayscale 64×64
 inputs that reaches under ~50% validation accuracy. This repository builds a
 substantially stronger CNN system through controlled experiments.
 
-> **Status:** experiments in progress. The result tables below are filled in from
-> `experiments/results/results.csv`, which is written automatically by `train.py`.
-> Any row marked `pending` has not been run yet.
+> **Status:** final model runs in progress. Tables are generated from
+> `experiments/results/results.csv`, which `train.py` writes automatically — see
+> `scripts/make_report_table.py`. Rows marked _pending_ have not finished yet.
 
 ---
 
@@ -20,15 +20,37 @@ substantially stronger CNN system through controlled experiments.
 |---|---|
 | **Test accuracy (final model)** | _pending_ |
 | Validation accuracy (selected checkpoint) | _pending_ |
-| Architecture | ConvNeXt-Tiny, ImageNet-1k pretrained, fully fine-tuned |
+| Best validation accuracy so far | **94.58%** (ResNet-18, fine-tuned, basic augmentation) |
 | Input resolution | 224 × 224 RGB |
-| Validation strategy | Stratified 80/20 split of the 2,400 training images (seed 0), 30 validation images per class |
+| Validation strategy | Stratified 80/20 split of the 2,400 training images (seed 0), exactly 30 validation images per class |
+| Measured noise floor | **±0.62 pp** between repeats at a fixed seed |
 | Config | [`configs/best.yaml`](configs/best.yaml) |
 | Checkpoint | _pending_ |
 
 The test set is used **once**, to score the single checkpoint already selected on
 validation accuracy. `train.py` does not touch the test set unless
 `--evaluate-test` is passed explicitly.
+
+### The three results that matter
+
+**A linear probe with 8,208 trainable parameters reaches 91%.** Freezing all of
+ResNet-18's convolutional weights and training only the 16-way head takes the
+starter's 49.58% to 90.83–91.04%. Generic ImageNet features are very nearly
+sufficient for this task; full fine-tuning of 11.2M parameters — 1,360× more —
+adds 3.4 points.
+
+**Accuracy saturates near 94%, and nothing after that helps.** ResNet-50 with
+strong augmentation (23.5M parameters, RandAugment, 40 epochs) scored 94.38%,
+slightly *below* a plain fine-tuned ResNet-18 at 94.58%. Validation accuracy sat
+in 0.93–0.94 from epoch 13 to 40 while train loss flattened at the
+label-smoothing floor.
+
+**The noise floor is 0.62 pp, so most small differences are not real.** Repeating
+the same config at the same seed gave 94.58% and 93.96%, a spread of 3 images out
+of 480. GPU runs are not bitwise reproducible at fixed seed because cuDNN
+benchmarking selects algorithms non-deterministically. Any single-run claim below
+roughly 1 pp on this validation set is unsupported, which is why experiments are
+reported as repeats rather than best-of.
 
 ---
 
@@ -128,18 +150,28 @@ reason each component is present. The short version:
 Each config changes approximately one factor from the previous row, so a
 difference can be attributed. Numbers come from `experiments/results/results.csv`.
 
-| # | Experiment | What changed | Hypothesis | Val acc | Observation |
-|---|---|---|---|---:|---|
-| 00 | Starter TNet | — (reproduction) | Reference point | _pending_ | _pending_ |
-| 01 | + colour, 128px, stratified split | Preprocessing only, same weak architecture | Grayscale 64×64 throws away usable signal | _pending_ | _pending_ |
-| 02 | Modern CNN from scratch | 8-conv net, BatchNorm, GAP | Depth/normalisation beat a one-layer net; also the no-pretraining control | _pending_ | _pending_ |
-| 03 | ResNet-18 linear probe | ImageNet weights frozen | Generic features may already suffice at this data scale | _pending_ | _pending_ |
-| 04 | ResNet-18 fine-tuned | Unfreeze backbone | Scene classes differ from ImageNet objects enough to need adaptation | _pending_ | _pending_ |
-| 05 | ResNet-50 fine-tuned | Capacity only | More capacity helps — or overfits 1,920 images | _pending_ | _pending_ |
-| 06 | + strong augmentation | `augment.preset` only | If the train/val gap is the bottleneck, this closes it | _pending_ | _pending_ |
-| 07 | + mixup / cutmix | Label-space regularisation | Helps most when data are scarce | _pending_ | _pending_ |
-| 08 | ConvNeXt-Tiny | Architecture family | Better ImageNet recipe transfers better at similar cost | _pending_ | _pending_ |
-| — | **Final (best.yaml)** | + EMA + flip TTA | Variance reduction | _pending_ | _pending_ |
+Two numbers in a cell are two runs at the **same** seed, which is how the noise
+floor above was measured.
+
+| # | Experiment | What changed | Params | Val acc (%) | Observation |
+|---|---|---|---:|---:|---|
+| 00 | Starter TNet | — (reproduction) | 57.8K | 49.58 / 49.58 | Matches the handout's "under ~50%" |
+| 01 | + colour, 128px | Preprocessing only, same architecture | 246.5K | 58.75 / 58.13 | +8.8 pp for free; preprocessing was the first bottleneck, not capacity |
+| 03 | ResNet-18 linear probe | ImageNet weights frozen | **8.2K** | 91.04 / 90.83 | +32.4 pp training 8,208 parameters |
+| 04 | ResNet-18 fine-tuned | Unfreeze backbone | 11.2M | 94.58 / 93.96 | +3.4 pp for 1,360× the trainable parameters |
+| 05 | ResNet-50 fine-tuned | Capacity only | 23.5M | _pending_ | _pending_ |
+| 06 | + strong augmentation | `augment.preset` only | 23.5M | 94.38 | No gain; the diagnosis behind it was wrong (see failure analysis) |
+| 02 | Modern CNN from scratch | No ImageNet weights | 4.7M | _pending_ | Isolates pretraining from architecture |
+| 07 | + mixup / cutmix | Label-space regularisation | 23.5M | _pending_ | _pending_ |
+| 08 | ConvNeXt-Tiny | Architecture family | 27.8M | _pending_ | _pending_ |
+| — | **Final (best.yaml)** | + EMA + flip TTA | _pending_ | _pending_ | _pending_ |
+
+Regenerate this table from the recorded runs at any time:
+
+```bash
+python scripts/make_report_table.py
+python scripts/make_report_table.py --seed-summary
+```
 
 Reproduce any row with:
 
@@ -158,9 +190,37 @@ python train.py --config configs/best.yaml --set optim.label_smoothing=0.0
 
 ## 6. Failure analysis
 
-_To be completed once the experiment ladder has run._ Candidate write-ups will be
-based on whichever of these actually fails: mixup/cutmix at a 40-epoch budget,
-capacity scaling to ResNet-50, or resolution increases beyond 224.
+**Strong augmentation did not help, and the diagnosis behind it was wrong.**
+
+Experiment 05 showed validation accuracy peaking at epoch 2 and then declining
+while training loss kept falling — the classic signature of overfitting, which on
+1,920 images against 23.5M parameters was entirely expected. Experiment 06 added
+RandAugment, colour jitter and RandomErasing and extended training to 40 epochs.
+
+It scored 94.38% against 94.58% for a plain ResNet-18 with basic augmentation:
+no improvement, from a model with twice the parameters and a third more epochs.
+
+What that early peak actually reflects is that pretrained features are already
+nearly optimal for these classes, so the useful adaptation finishes within a
+couple of epochs; afterwards the head fits residual noise and the validation
+metric wanders inside its own noise floor. Pixel-level augmentation cannot help
+because input diversity was never the limitation. The train/validation **loss**
+curves show this where the accuracy trace does not — training loss had flattened
+at the label-smoothing floor, so the model was not straining against a hard
+objective at all.
+
+The deeper mistake was measuring before establishing the noise floor. The
+"decline" from 93.96% looked like signal until the same configuration, run twice
+at the same seed, produced a 0.62 pp spread. Establishing that first would have
+redirected the effort to per-class error analysis, where the remaining ~6%
+actually lives.
+
+Reproduce the evidence:
+
+```bash
+python scripts/plot_history.py --runs runs/05_resnet50_finetune_seed0 runs/06_resnet50_strong_aug_seed0 \
+    --out reports/augmentation_effect.png
+```
 
 ---
 

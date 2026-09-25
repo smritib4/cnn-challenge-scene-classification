@@ -111,11 +111,55 @@ amp_enabled = amp_requested and device.type == "cuda"
 
 so the same config file is correct on both machines.
 
-### 2.3 To be extended
+### 2.3 Wrong: a resolution-agnostic layer that broke parameter counting
 
-Further entries will be added as the experiment ladder runs — in particular any
-case where an AI-suggested hyperparameter or "improvement" failed to reproduce as
-a validation gain.
+To make `TNet` work at any input resolution, the classifier was written as
+`nn.LazyLinear`, which infers its input width on the first forward pass. This is
+idiomatic and looks like a clean way to avoid hardcoding a shape.
+
+It crashed both baseline experiments on the GPU. `train.py` logs the trainable
+parameter count before training starts, and lazy parameters do not exist until a
+forward pass has happened, so `p.numel()` raised `ValueError: Attempted to use an
+uninitialized parameter`. Worse, the pipeline smoke test used `resnet18`, so the
+`tnet` path was never exercised locally and the failure only appeared after the
+dataset was mounted and the GPU session was running.
+
+The fix computes the flattened width from `img_size` — a 3×3 convolution without
+padding followed by a 4×4 stride-4 max-pool gives `(img_size - 2) // 4` — which
+yields 57,776 parameters at 64px, matching the starter's `16 * 15 * 15` linear
+input exactly, so the reproduction stays faithful.
+
+The verification is the more important part. `scripts/check_models.py` builds all
+16 model/resolution/grayscale/freeze combinations and deliberately performs the
+operations **in the order `train.py` performs them**: count parameters, construct
+the optimizer, and only then run a forward pass. A check that ran a forward pass
+first — the obvious way to write it — would pass while the bug was still present.
+
+### 2.4 Questionable: silently appending every run to the reported results file
+
+`train.py` appends one row per run to `experiments/results/results.csv`, which is
+what the report table is generated from. That is a good design, but the path was
+hardcoded, so *every* execution contaminated it — including throwaway pipeline
+tests on synthetic data. A row reading `smoke, 93.75%` appeared in the results
+table alongside real experiments, and on synthetic data that number means nothing
+at all.
+
+The results path is now a `--results-csv` flag and the notebook's smoke test
+redirects it. This is a small change, but a report table that silently mixes real
+and synthetic results is a correctness problem rather than an inconvenience.
+
+### 2.5 Ineffective: an interrupt that discarded 8 epochs of GPU work
+
+When a Colab run needed to be stopped, the resulting `KeyboardInterrupt`
+propagated out of the training loop, so no checkpoint and no results row were
+written — discarding a ResNet-50 run that had already reached 93.96% validation
+accuracy. The best weights were sitting in memory at the time.
+
+`fit()` now catches the interrupt, keeps the best-so-far weights, and flags the run
+with `interrupted` and `epochs_completed`. The report table labels such rows
+incomplete, shows the epochs actually run, and excludes them from best-run
+selection — because a run cut short is not comparable to a full one, and quietly
+treating it as if it were would be worse than losing it.
 
 ---
 
@@ -147,7 +191,30 @@ unstratified path available (`data.split: random`) purely so that experiment 00
 reproduces the starter's number faithfully rather than being confounded by my own
 change.
 
-### A second decision: where experiments run
+### A second decision: measure the noise floor before believing any result
+
+Nothing suggested this, and it changed how the entire results table should be read.
+
+Because the phase 1 experiments were accidentally run twice at the same seed, I had
+unintentional repeats. Experiment 04 produced 94.58% and 93.96% — a 0.62 pp spread
+from an identical configuration and an identical seed. GPU training is not bitwise
+reproducible: cuDNN benchmarking selects convolution algorithms based on runtime
+timing, and floating-point reduction orders vary between those algorithms.
+
+Rather than treat that as an annoyance, I made it the reference point for the whole
+table. 0.62 pp is 3 images out of 480, which means the 0.2 pp separating my best
+ResNet-18 from ResNet-50-with-strong-augmentation is not a result at all. The
+standard workflow — run each configuration once, report the best — would have had
+me claim that ResNet-50 and RandAugment mattered, and then write a "secret recipe"
+section justifying components that do nothing.
+
+So the experiment table reports repeats instead of best-of, `make_report_table.py`
+has a `--seed-summary` mode reporting mean and spread, and the final recipe is run
+across three seeds. An AI assistant will happily help you tune to a validation set
+well past the point where the differences are real; knowing where that point is
+was my responsibility.
+
+### A third decision: where experiments run
 
 The development laptop has no CUDA GPU. Rather than shrink the research question
 to fit the hardware (small models, low resolution), I kept the repository
