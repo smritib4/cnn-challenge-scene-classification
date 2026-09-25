@@ -1,0 +1,16 @@
+# Core deep learning stack.
+# Installed from the PyTorch CPU index locally; Colab already ships a CUDA build.
+torch>=2.2
+torchvision>=0.17
+
+# Config, numerics, plotting, metrics
+PyYAML>=6.0
+numpy>=1.26
+matplotlib>=3.8
+scikit-learn>=1.4
+pandas>=2.2
+
+# Progress bars and dataset download
+tqdm>=4.66
+gdown>=5.1
+Pillow>=10.2
