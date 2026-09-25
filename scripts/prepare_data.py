@@ -9,10 +9,15 @@ Target layout:
       train/<class_name>/*.jpg
       test/<class_name>/*.jpg
 
-The script locates the `train`/`test` directories wherever they sit inside the
-archive, ignores macOS metadata entries, verifies that both splits share the same
-class names, and prints per-class counts so a truncated download is obvious
-before any GPU time is spent.
+The script discovers every split directory wherever it sits inside the source
+tree, rather than assuming a fixed depth or a fixed set of names. The provided
+dataset ships `train`, `test` and an additional `test2`, so all splits found are
+copied through under their own names and reported; which one is scored is then a
+config choice (`data.test_dir`) instead of something hardcoded here.
+
+macOS metadata entries are skipped, class names are cross-checked between splits,
+and per-class counts are printed so a truncated download is obvious before any
+GPU time is spent.
 """
 
 from __future__ import annotations
@@ -25,14 +30,34 @@ from collections import Counter
 from pathlib import Path
 
 IMG_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
-SPLIT_ALIASES = {
-    "train": {"train", "training", "train_set"},
-    "test": {"test", "testing", "test_set", "val", "validation"},
-}
+
+# Names that mean "this is the training split". Everything else that looks like a
+# split is carried through under its own name.
+TRAIN_ALIASES = {"train", "training", "train_set"}
 
 
 def is_image(path: Path) -> bool:
     return path.suffix.lower() in IMG_EXTENSIONS and not path.name.startswith(".")
+
+
+def is_class_dir(path: Path) -> bool:
+    """A class directory holds images *directly*, not in nested subfolders."""
+    if not path.is_dir() or path.name.startswith("."):
+        return False
+    return any(is_image(child) for child in path.iterdir() if child.is_file())
+
+
+def is_split_dir(path: Path) -> bool:
+    """A split directory's children are class directories.
+
+    Requiring images one level down (not merely somewhere below) is what stops
+    the dataset root itself from being mistaken for a split: `data/` contains
+    `train/`, which contains images only two levels down.
+    """
+    if not path.is_dir() or path.name.startswith("."):
+        return False
+    class_dirs = [child for child in path.iterdir() if is_class_dir(child)]
+    return len(class_dirs) >= 2
 
 
 def extract_zip(zip_path: Path, dest: Path) -> Path:
@@ -50,16 +75,18 @@ def extract_zip(zip_path: Path, dest: Path) -> Path:
 
 
 def find_split_dirs(root: Path) -> dict[str, Path]:
-    """Search the tree for directories that look like the train/test splits."""
+    """Find every split directory in the tree, keyed by its own folder name.
+
+    The training split is normalised to the key `train` so the rest of the code
+    can rely on it; other splits keep their source names (`test`, `test2`, ...).
+    """
     found: dict[str, Path] = {}
     for candidate in [root, *sorted(p for p in root.rglob("*") if p.is_dir())]:
+        if not is_split_dir(candidate):
+            continue
         name = candidate.name.lower()
-        for split, aliases in SPLIT_ALIASES.items():
-            if name in aliases and split not in found:
-                # A split directory must contain class subdirectories with images.
-                subdirs = [d for d in candidate.iterdir() if d.is_dir()]
-                if subdirs and any(any(is_image(f) for f in d.rglob("*")) for d in subdirs):
-                    found[split] = candidate
+        key = "train" if name in TRAIN_ALIASES else name
+        found.setdefault(key, candidate)
     return found
 
 
@@ -110,36 +137,57 @@ def main() -> None:
     if "train" not in splits:
         sys.exit(
             f"Could not find a 'train' directory with class subfolders under {search_root}.\n"
-            "Inspect the archive and pass the correct --src path."
+            f"Splits detected: {sorted(splits) or 'none'}\n"
+            "Inspect the source and pass the correct --src path."
         )
-    print(f"Found train: {splits['train']}")
-    if "test" in splits:
-        print(f"Found test:  {splits['test']}")
-    else:
-        print("WARNING: no test directory found. Training will still work; test scoring will not.")
+    for name in sorted(splits):
+        print(f"Found split '{name}': {splits[name]}")
+    if len(splits) == 1:
+        print("WARNING: only a training split was found; test scoring will not be possible.")
 
-    train_counts = copy_split(splits["train"], out_root / "train")
-    test_counts = copy_split(splits["test"], out_root / "test") if "test" in splits else Counter()
+    # Copy train first so it can anchor the class-name comparison.
+    order = ["train"] + sorted(k for k in splits if k != "train")
+    counts: dict[str, Counter] = {}
+    for name in order:
+        print(f"Copying '{name}' ...", flush=True)
+        counts[name] = copy_split(splits[name], out_root / name)
+
+    train_counts = counts["train"]
+    other_names = [n for n in order if n != "train"]
 
     print(f"\nClasses: {len(train_counts)}")
-    print(f"{'class':<28}{'train':>8}{'test':>8}")
+    header = f"{'class':<28}" + "".join(f"{n:>8}" for n in order)
+    print(header)
     for class_name in sorted(train_counts):
-        print(f"{class_name:<28}{train_counts[class_name]:>8}{test_counts.get(class_name, 0):>8}")
-    print(f"{'TOTAL':<28}{sum(train_counts.values()):>8}{sum(test_counts.values()):>8}")
+        row = f"{class_name:<28}" + "".join(f"{counts[n].get(class_name, 0):>8}" for n in order)
+        print(row)
+    print(f"{'TOTAL':<28}" + "".join(f"{sum(counts[n].values()):>8}" for n in order))
 
-    if test_counts and set(test_counts) != set(train_counts):
-        print(
-            "\nWARNING: train and test class names differ:"
-            f"\n  train-only: {sorted(set(train_counts) - set(test_counts))}"
-            f"\n  test-only:  {sorted(set(test_counts) - set(train_counts))}"
-        )
+    for name in other_names:
+        if set(counts[name]) != set(train_counts):
+            print(
+                f"\nWARNING: class names in '{name}' differ from 'train':"
+                f"\n  train-only: {sorted(set(train_counts) - set(counts[name]))}"
+                f"\n  {name}-only: {sorted(set(counts[name]) - set(train_counts))}"
+                "\nImageFolder assigns label indices alphabetically per directory, so a "
+                "mismatched class list would silently mislabel predictions. This split "
+                "cannot be used for scoring as-is."
+            )
 
     expected_total = 2400
     actual_total = sum(train_counts.values())
     if actual_total != expected_total:
         print(
-            f"\nNOTE: expected {expected_total} training images per the assignment, found {actual_total}. "
-            "If this is lower, the download may be incomplete."
+            f"\nNOTE: the assignment specifies {expected_total} training images, found {actual_total}. "
+            "A lower count means the copy or download is incomplete."
+        )
+
+    if len(other_names) > 1:
+        print(
+            f"\nNOTE: multiple non-training splits present ({', '.join(other_names)}). "
+            "The default config scores 'test'; select another with "
+            "--set data.test_dir=<name>. Decide which split is the graded one before "
+            "reporting a final number."
         )
 
     if staging is not None and not args.keep_staging:
