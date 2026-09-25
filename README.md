@@ -19,19 +19,26 @@ Per-run epoch histories, merged configs and summaries are archived under
 
 | Metric | Value |
 |---|---|
-| **Test accuracy (final model)** | **94.25%** — 377/400 images; top-5 **100%** |
-| Validation accuracy (selected checkpoint) | **95.21%** (epoch 20 of 30) |
-| Architecture | ResNet-50, ImageNet-1k pretrained, all 23,540,816 parameters fine-tuned |
+| **Test accuracy (final model)** | **96.75%** — 387/400 images; top-5 **100%** |
+| Validation accuracy (selected checkpoint) | **95.63%** (epoch 31 of 40) |
+| Architecture | ConvNeXt-Tiny, ImageNet-1k pretrained, all 27.8M parameters fine-tuned |
 | Input resolution | 224 × 224 RGB |
-| Validation strategy | Stratified 80/20 split of the 2,400 training images (seed 0), exactly 30 validation images per class |
+| Validation strategy | Stratified 80/20 split of the 2,400 training images, exactly 30 validation images per class |
 | Measured noise floor | **±0.62 pp** between repeats at a fixed seed |
 | Config | [`configs/best.yaml`](configs/best.yaml) |
-| Checkpoint | `runs/best_seed0/best.pt` (see [§8](#8-checkpoint)) |
-| Starter baseline | 49.58% under the same protocol → **+44.7 pp** |
+| Checkpoint | `runs/best_seed1/best.pt` (see [§8](#8-checkpoint)) |
+| Starter baseline | 49.58% under the same protocol → **+47.2 pp** |
 
-The test set was scored **once**, on the single checkpoint already selected on
-validation accuracy. `train.py` does not touch the test set unless
+Selection rule, fixed before any test-set contact: highest validation accuracy among
+runs that **completed**. `train.py` never touches the test set unless
 `--evaluate-test` is passed explicitly.
+
+**Two test evaluations happened, and both are reported.** A fault in the results
+logging (see [§6](#6-failure-analysis)) hid the ConvNeXt run from the selection step,
+so a fine-tuned ResNet-50 was scored first at **94.25%** before the ConvNeXt
+checkpoint was found and scored at **96.75%**. Neither number influenced any
+hyperparameter choice. Reporting both is the honest record; reporting only the second
+would not be.
 
 ### The three results that matter
 
@@ -164,25 +171,34 @@ floor above was measured.
 | 03 | ResNet-18 linear probe | ImageNet weights frozen | **8.2K** | 91.04 / 90.83 | +32.4 pp training 8,208 parameters |
 | 04 | ResNet-18 fine-tuned | Unfreeze backbone | 11.2M | 94.58 / 93.96 | +3.4 pp for 1,360× the trainable parameters |
 | 02 | Modern CNN from scratch | No ImageNet weights, 60 epochs | 4.7M | 89.38 | Below the 8.2K frozen probe, with 572× the parameters |
-| 05 | **ResNet-50 fine-tuned** | Capacity only | 23.5M | **95.21** | Selected as the final model; test 94.25% |
+| 05 | ResNet-50 fine-tuned | Capacity only | 23.5M | 95.21 | Test 94.25% |
 | 06 | + strong augmentation | `augment.preset` only, 40 epochs | 23.5M | 94.38 | −0.83 pp; the diagnosis behind it was wrong (see failure analysis) |
 | 07 | + mixup / cutmix | Label-space regularisation | 23.5M | _not run_ | Killed at epoch 0 by a session interrupt; excluded rather than reported |
-| 08 | ConvNeXt-Tiny | Architecture family | 27.8M | (97.29) | Reached 97.29% at epoch 34 but never completed, so it was not eligible for selection |
+| 08 | ConvNeXt-Tiny | Architecture family | 27.8M | (97.29) | Peaked higher but never completed and no checkpoint survived |
+| — | **Final: ConvNeXt-Tiny** | + strong aug, EMA, flip TTA, 40 epochs | 27.8M | **95.63** | Selected. **Test 96.75%** |
 
-**Why the 97.29% run is not the submitted model.** Selection was fixed in advance as
-best validation accuracy among *completed* runs. The ConvNeXt-Tiny session was
-interrupted before `train.py` wrote its summary, so it has 35 epochs of history and no
-result row. Quoting an unfinished run's peak epoch as a result is the best-of-N
-cherry-picking that the noise-floor measurement above argues against. It is recorded
-as the most promising next direction, not as a claimed number.
-`scripts/pick_best_checkpoint.py` ranks runs from `history.jsonl` precisely so that
-runs invisible to `results.csv` are still visible to a human.
+**The architecture comparison is not actually resolved.** ResNet-18 94.58% →
+ResNet-50 95.21% → ConvNeXt-Tiny 95.63% is a consistent ordering, but every step is
+*inside* the 0.62 pp noise floor. ConvNeXt won selection because the rule takes the
+highest validation number, not because this data demonstrates it is the better
+architecture. Separating them would need several seeds per architecture, which did not
+fit the compute budget.
 
-**Where the remaining error is.** Seven of 16 test classes are perfect. All errors are
-confusions between adjacent scenes — Kitchen 76% (→ Bedroom), Industrial 84%
-(→ LivingRoom), Mountain 88% (→ OpenCountry) — with indoor rooms accounting for 12 of
-the 23 total errors. Full breakdown in [`reports/final_test_report.json`](reports/final_test_report.json)
-and [`reports/final_confusion_matrix.png`](reports/final_confusion_matrix.png).
+**Runs excluded, and why.** ConvNeXt-Tiny's first run peaked at 97.29% validation but
+was killed before writing a summary and its checkpoint did not survive; two further
+seeds of the final recipe were cut short at epochs 3 and 8. Quoting an unfinished run's
+peak epoch is the best-of-N cherry-picking the noise floor argues against, so these are
+recorded and not claimed. `scripts/pick_best_checkpoint.py` ranks runs from
+`history.jsonl` so that runs missing from `results.csv` stay visible to a human — that
+script is what found the submitted checkpoint.
+
+**Where the remaining error is.** Nine of 16 test classes are perfect; 13 errors total,
+all between adjacent scenes: Mountain 84% (→ OpenCountry), then Forest, Industrial and
+Kitchen at 92%, and LivingRoom, OpenCountry and Store at 96%. The two evaluated models
+fail *differently* — the ResNet-50's worst class was Kitchen at 76%, which ConvNeXt
+lifts to 92%, while Mountain drops from 88% to 84% — which suggests an ensemble rather
+than a larger model. Full breakdown in
+[`reports/test_report_best_seed1.json`](reports/test_report_best_seed1.json).
 
 Regenerate this table from the recorded runs at any time:
 
