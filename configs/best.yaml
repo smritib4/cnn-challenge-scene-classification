@@ -1,35 +1,48 @@
-# FINAL RECIPE - reproduces the submitted checkpoint and the reported test accuracy.
+# FINAL RECIPE - reproduces the submitted checkpoint (runs/best_seed1/best.pt).
 #
-# Identical to configs/05_resnet50_finetune.yaml, restated in full so this file is
-# self-contained. That experiment was the best *completed* run on validation
-# (95.21%) and is the model scored on the test set (94.25%).
+#   python train.py --config configs/best.yaml
+#
+# Selection rule, fixed before any test-set contact: the checkpoint with the highest
+# validation accuracy among *completed* runs. This run reached 95.63% validation over
+# 40 epochs, ahead of the fully fine-tuned ResNet-50 at 95.21%.
+#
+# Read that margin honestly: 0.42 pp is *inside* the 0.62 pp noise floor measured by
+# repeating a configuration at a fixed seed (README section 3). ConvNeXt-Tiny and
+# ResNet-50 are therefore not distinguishable on this validation set; the rule picks
+# the higher number, but the evidence does not support claiming the architecture is
+# better. Both were scored on the test set and both numbers are disclosed in the
+# report rather than only the winner's.
 #
 # Why each element is here, with the measured justification from README.md:
 #
-#   resnet50 + ImageNet-1k weights, freeze: none - pretraining is worth ~32 pp on
-#     its own (experiment 3, a frozen backbone with an 8,208-parameter head reaches
-#     91.04%). Fine-tuning adds 3.4 pp (experiment 4) and ResNet-50 over ResNet-18
-#     adds 0.63 pp (experiment 5), which is only just outside the noise floor.
+#   convnext_tiny + ImageNet-1k weights, freeze: none - pretraining is the dominant
+#     factor by a wide margin: a *frozen* ResNet-18 with an 8,208-parameter head
+#     already reaches 91.04% (experiment 3), while the same architecture trained from
+#     scratch for 60 epochs reaches only 89.38% (experiment 2).
 #   224 px colour input - the starter's grayscale 64x64 discards colour and spatial
 #     detail; restoring it gains 8.8 pp on the starter's own architecture
-#     (experiment 1) before any change of model.
-#   augment.preset: basic - RandomResizedCrop plus horizontal flip only. The strong
-#     preset (RandAugment, colour jitter, RandomErasing) was tested in experiment 6
-#     and cost 0.83 pp; see the failure analysis in README.md.
-#   discriminative LR (backbone 3e-4, head 10x) - the head starts from noise and
-#     must move quickly; the pretrained filters must be protected.
-#   cosine schedule + 2 warmup epochs, stepped per batch - warmup keeps the
-#     untrained head's early gradients from damaging the backbone.
+#     (experiment 1) before changing the model at all.
+#   augment.preset: strong - RandomResizedCrop, flip, RandAugment, colour jitter and
+#     RandomErasing. Note this did NOT help ResNet-50: experiment 6 cost 0.83 pp
+#     against basic augmentation. It is here because this run, not that one, is the
+#     selected checkpoint - keeping it is a consequence of the selection rule, not a
+#     claim that the augmentation earned its place. See the failure analysis.
+#   discriminative LR (backbone 1e-4, head 10x) - the head starts from noise and must
+#     move quickly; the pretrained filters must be protected.
+#   cosine schedule + 3 warmup epochs, stepped per batch - warmup keeps the untrained
+#     head's early gradients from damaging the backbone.
 #   label smoothing 0.1 - mild calibration gain, cheap and consistent.
-#   ema.enabled: false, eval.tta: none - both are implemented and were exercised,
-#     but the selected checkpoint used neither; where EMA was enabled the plain
-#     weights were selected anyway, so they are not included for appearance.
-#   model selection on validation accuracy only, among completed runs. The test set
-#     was scored once, on the already-chosen checkpoint.
+#   weight EMA + horizontal-flip TTA - variance reducers on a 480-image validation
+#     set. EMA was enabled here but did not win selection: the plain weights scored
+#     higher at the best epoch, so the submitted weights are not the EMA weights.
+#
+# seed: 1 because that is the seed of the run that completed. Seeds 0 and 2 of this
+# same config were cut short by a session interrupt at epochs 3 and 8 and are
+# excluded; runs that did not finish are not comparable to one that did.
 experiment:
   name: best
-  notes: Final submitted recipe. ResNet-50, ImageNet-1k pretrained, fully fine-tuned.
-  seed: 0
+  notes: Final submitted recipe. ConvNeXt-Tiny, ImageNet-1k pretrained, fully fine-tuned.
+  seed: 1
 
 data:
   root: data
@@ -43,36 +56,36 @@ data:
   std: [0.229, 0.224, 0.225]
 
 augment:
-  preset: basic
+  preset: strong
   crop_scale: [0.65, 1.0]
   hflip: 0.5
   mixup_alpha: 0.0
   cutmix_alpha: 0.0
 
 model:
-  name: resnet50
+  name: convnext_tiny
   pretrained: true
   freeze: none
   dropout: 0.0
 
 optim:
   optimizer: adamw
-  lr: 0.0003
+  lr: 0.0001
   head_lr_mult: 10.0
   weight_decay: 0.05
   scheduler: cosine
-  warmup_epochs: 2
+  warmup_epochs: 3
   min_lr: 1.0e-6
-  epochs: 30
+  epochs: 40
   grad_clip: 1.0
   label_smoothing: 0.1
   amp: true
   ema:
-    enabled: false
+    enabled: true
     decay: 0.999
 
 eval:
-  tta: none
+  tta: hflip
   monitor: val_acc
 
 output:
