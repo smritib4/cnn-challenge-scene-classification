@@ -1,28 +1,34 @@
-# FINAL RECIPE - this is the config that produced the reported test accuracy.
+# FINAL RECIPE - reproduces the submitted checkpoint and the reported test accuracy.
 #
-# Every element below survived a controlled experiment in configs/00..08; see
-# README.md for the ablation table. Summary of why each piece is here:
+# Identical to configs/05_resnet50_finetune.yaml, restated in full so this file is
+# self-contained. That experiment was the best *completed* run on validation
+# (95.21%) and is the model scored on the test set (94.25%).
 #
-#   convnext_tiny + ImageNet weights - pretraining is by far the largest single
-#     gain with only 1,920 training images; ConvNeXt-Tiny beat ResNet-50 at
-#     comparable cost (experiments 5 vs 8).
-#   224 px colour input - the starter's grayscale 64x64 discards colour and
-#     spatial detail that scene classes depend on (experiment 1).
-#   strong augmentation - experiment 5 overfit heavily; RandAugment, colour
-#     jitter and RandomErasing closed most of the train/val gap (experiment 6).
-#   discriminative LR (backbone 1e-4, head 1e-3) - protects pretrained filters
-#     while letting the randomly initialised head move quickly.
-#   cosine schedule + 3 warmup epochs - warmup prevents the untrained head's
-#     large early gradients from damaging the backbone.
+# Why each element is here, with the measured justification from README.md:
+#
+#   resnet50 + ImageNet-1k weights, freeze: none - pretraining is worth ~32 pp on
+#     its own (experiment 3, a frozen backbone with an 8,208-parameter head reaches
+#     91.04%). Fine-tuning adds 3.4 pp (experiment 4) and ResNet-50 over ResNet-18
+#     adds 0.63 pp (experiment 5), which is only just outside the noise floor.
+#   224 px colour input - the starter's grayscale 64x64 discards colour and spatial
+#     detail; restoring it gains 8.8 pp on the starter's own architecture
+#     (experiment 1) before any change of model.
+#   augment.preset: basic - RandomResizedCrop plus horizontal flip only. The strong
+#     preset (RandAugment, colour jitter, RandomErasing) was tested in experiment 6
+#     and cost 0.83 pp; see the failure analysis in README.md.
+#   discriminative LR (backbone 3e-4, head 10x) - the head starts from noise and
+#     must move quickly; the pretrained filters must be protected.
+#   cosine schedule + 2 warmup epochs, stepped per batch - warmup keeps the
+#     untrained head's early gradients from damaging the backbone.
 #   label smoothing 0.1 - mild calibration gain, cheap and consistent.
-#   weight EMA - averages away late-training noise; the validation set is only
-#     ~480 images, so single-epoch peaks are unreliable.
-#   horizontal-flip TTA - scenes are close to mirror-symmetric, so flip
-#     averaging is a free variance reduction at inference time.
-#   model selection on validation accuracy only - the test set is touched once.
+#   ema.enabled: false, eval.tta: none - both are implemented and were exercised,
+#     but the selected checkpoint used neither; where EMA was enabled the plain
+#     weights were selected anyway, so they are not included for appearance.
+#   model selection on validation accuracy only, among completed runs. The test set
+#     was scored once, on the already-chosen checkpoint.
 experiment:
   name: best
-  notes: Final submitted recipe. ConvNeXt-Tiny, ImageNet-1k pretrained, fully fine-tuned.
+  notes: Final submitted recipe. ResNet-50, ImageNet-1k pretrained, fully fine-tuned.
   seed: 0
 
 data:
@@ -37,35 +43,36 @@ data:
   std: [0.229, 0.224, 0.225]
 
 augment:
-  preset: strong
+  preset: basic
   crop_scale: [0.65, 1.0]
+  hflip: 0.5
   mixup_alpha: 0.0
   cutmix_alpha: 0.0
 
 model:
-  name: convnext_tiny
+  name: resnet50
   pretrained: true
   freeze: none
   dropout: 0.0
 
 optim:
   optimizer: adamw
-  lr: 0.0001
+  lr: 0.0003
   head_lr_mult: 10.0
   weight_decay: 0.05
   scheduler: cosine
-  warmup_epochs: 3
+  warmup_epochs: 2
   min_lr: 1.0e-6
-  epochs: 40
+  epochs: 30
   grad_clip: 1.0
   label_smoothing: 0.1
   amp: true
   ema:
-    enabled: true
+    enabled: false
     decay: 0.999
 
 eval:
-  tta: hflip
+  tta: none
   monitor: val_acc
 
 output:
