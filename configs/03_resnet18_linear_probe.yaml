@@ -1,0 +1,30 @@
+# Experiment 3: ImageNet ResNet-18 with a frozen backbone (linear probe).
+# Hypothesis: with only 1,920 training images, generic ImageNet features may
+# already be close to sufficient. A linear probe is the cheapest possible
+# transfer-learning baseline and bounds how much fine-tuning actually buys.
+experiment:
+  name: 03_resnet18_linear_probe
+  notes: Only the 16-way head is trained; all convolutional weights stay frozen.
+  seed: 0
+
+data:
+  img_size: 224
+  batch_size: 64
+
+augment:
+  preset: basic
+
+model:
+  name: resnet18
+  pretrained: true
+  freeze: backbone
+
+optim:
+  optimizer: adamw
+  lr: 0.001
+  head_lr_mult: 1.0
+  weight_decay: 0.0
+  scheduler: cosine
+  warmup_epochs: 1
+  epochs: 20
+  label_smoothing: 0.0

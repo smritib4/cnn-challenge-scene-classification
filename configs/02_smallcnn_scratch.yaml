@@ -1,0 +1,32 @@
+# Experiment 2: a modern CNN trained from scratch (no ImageNet weights).
+# Hypothesis: depth, batch norm and global average pooling should beat the
+# one-layer starter by a wide margin. This is also the control that tells us how
+# much of the final accuracy comes from pretraining rather than architecture.
+experiment:
+  name: 02_smallcnn_scratch
+  notes: 8-conv VGG-style net with BN + GAP, trained from random initialisation.
+  seed: 0
+
+data:
+  img_size: 128
+  grayscale: false
+  split: stratified
+  batch_size: 64
+
+augment:
+  preset: basic
+
+model:
+  name: smallcnn
+  pretrained: false
+  dropout: 0.2
+
+optim:
+  optimizer: adamw
+  lr: 0.001
+  head_lr_mult: 1.0
+  weight_decay: 0.01
+  scheduler: cosine
+  warmup_epochs: 3
+  epochs: 60
+  label_smoothing: 0.0

@@ -1,0 +1,36 @@
+# Tiny, fast configuration used only to verify the pipeline end to end on CPU.
+# Not a research result - 2 epochs at 64px cannot say anything about accuracy.
+# Its job is to catch shape errors, transform bugs and checkpoint/reload bugs
+# before any GPU time is spent.
+experiment:
+  name: smoke
+  notes: Pipeline smoke test. Exercises AMP-off, EMA, mixup and TTA code paths.
+  seed: 0
+
+data:
+  img_size: 64
+  batch_size: 16
+  num_workers: 0
+
+augment:
+  preset: strong
+  mixup_alpha: 0.2
+  cutmix_alpha: 1.0
+  mix_prob: 1.0
+
+model:
+  name: resnet18
+  pretrained: false
+
+optim:
+  optimizer: adamw
+  lr: 0.0005
+  epochs: 2
+  warmup_epochs: 1
+  amp: false
+  ema:
+    enabled: true
+    decay: 0.9
+
+eval:
+  tta: hflip

@@ -1,0 +1,30 @@
+# Experiment 8: a modern CNN family with a stronger ImageNet recipe.
+# Hypothesis: ConvNeXt-Tiny has roughly ResNet-50's cost but much better ImageNet
+# accuracy, and modern training recipes transfer better. It is still a pure
+# convolutional network, so it satisfies the assignment's CNN requirement.
+# ConvNeXt prefers a lower LR and higher weight decay than ResNet.
+experiment:
+  name: 08_convnext_tiny
+  notes: Architecture-family ablation against ResNet-50 at matched augmentation.
+  seed: 0
+
+data:
+  img_size: 224
+  batch_size: 32
+
+augment:
+  preset: strong
+
+model:
+  name: convnext_tiny
+  pretrained: true
+
+optim:
+  optimizer: adamw
+  lr: 0.0001
+  head_lr_mult: 10.0
+  weight_decay: 0.05
+  scheduler: cosine
+  warmup_epochs: 3
+  epochs: 40
+  label_smoothing: 0.1

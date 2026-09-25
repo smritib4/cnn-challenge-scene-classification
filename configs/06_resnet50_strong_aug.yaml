@@ -1,0 +1,31 @@
+# Experiment 6: attack overfitting with stronger augmentation.
+# Hypothesis: experiment 5 is expected to show a large train/val loss gap. If the
+# gap is the limiting factor, RandAugment + colour jitter + RandomErasing should
+# close it; if the model is instead capacity- or optimisation-limited, stronger
+# augmentation will make things worse. Either outcome is informative.
+experiment:
+  name: 06_resnet50_strong_aug
+  notes: Only augment.preset changes relative to 05. Longer schedule because
+    heavier augmentation slows convergence.
+  seed: 0
+
+data:
+  img_size: 224
+  batch_size: 32
+
+augment:
+  preset: strong
+
+model:
+  name: resnet50
+  pretrained: true
+
+optim:
+  optimizer: adamw
+  lr: 0.0003
+  head_lr_mult: 10.0
+  weight_decay: 0.05
+  scheduler: cosine
+  warmup_epochs: 2
+  epochs: 40
+  label_smoothing: 0.1

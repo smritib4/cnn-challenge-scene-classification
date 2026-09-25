@@ -1,0 +1,31 @@
+# Experiment 4: fine-tune the whole ResNet-18.
+# Hypothesis: scene classes differ enough from ImageNet's object-centric classes
+# that adapting the mid/high-level filters should beat a frozen probe. Backbone
+# LR is kept low (head_lr_mult=10) so pretrained features are not destroyed in
+# the first few noisy steps.
+experiment:
+  name: 04_resnet18_finetune
+  notes: Full fine-tuning, discriminative LR, cosine schedule with warmup.
+  seed: 0
+
+data:
+  img_size: 224
+  batch_size: 32
+
+augment:
+  preset: basic
+
+model:
+  name: resnet18
+  pretrained: true
+  freeze: none
+
+optim:
+  optimizer: adamw
+  lr: 0.0003
+  head_lr_mult: 10.0
+  weight_decay: 0.05
+  scheduler: cosine
+  warmup_epochs: 2
+  epochs: 30
+  label_smoothing: 0.1

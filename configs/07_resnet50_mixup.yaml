@@ -1,0 +1,33 @@
+# Experiment 7: add mixup/cutmix on top of strong augmentation.
+# Hypothesis: label-space regularisation attacks overconfidence differently from
+# pixel-space augmentation, and tends to help most exactly when data are scarce.
+# Risk: mixup typically needs long schedules to pay off, so this may underperform
+# at 40 epochs.
+experiment:
+  name: 07_resnet50_mixup
+  notes: Adds mixup 0.2 / cutmix 1.0 to the experiment 6 recipe.
+  seed: 0
+
+data:
+  img_size: 224
+  batch_size: 32
+
+augment:
+  preset: strong
+  mixup_alpha: 0.2
+  cutmix_alpha: 1.0
+  mix_prob: 0.5
+
+model:
+  name: resnet50
+  pretrained: true
+
+optim:
+  optimizer: adamw
+  lr: 0.0003
+  head_lr_mult: 10.0
+  weight_decay: 0.05
+  scheduler: cosine
+  warmup_epochs: 3
+  epochs: 60
+  label_smoothing: 0.1

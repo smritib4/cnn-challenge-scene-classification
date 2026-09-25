@@ -1,0 +1,34 @@
+# Experiment 1: same weak TNet architecture, but keep colour and raise resolution.
+# Hypothesis: the starter discards two cheap and highly informative signals -
+# colour (sky/vegetation/indoor lighting are strong scene cues) and spatial
+# detail. If accuracy jumps without touching the architecture, the starter's
+# preprocessing was a bigger bottleneck than its capacity.
+experiment:
+  name: 01_baseline_plus_color
+  notes: Isolates preprocessing (colour + 128px + stratified split) from architecture.
+  seed: 0
+
+data:
+  img_size: 128
+  grayscale: false
+  split: stratified
+  batch_size: 64
+
+augment:
+  preset: none
+
+model:
+  name: tnet
+  pretrained: false
+
+optim:
+  optimizer: adam
+  lr: 0.002
+  head_lr_mult: 1.0
+  weight_decay: 0.0
+  scheduler: none
+  warmup_epochs: 0
+  epochs: 20
+  grad_clip: 0.0
+  label_smoothing: 0.0
+  amp: false

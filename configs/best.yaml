@@ -1,0 +1,73 @@
+# FINAL RECIPE - this is the config that produced the reported test accuracy.
+#
+# Every element below survived a controlled experiment in configs/00..08; see
+# README.md for the ablation table. Summary of why each piece is here:
+#
+#   convnext_tiny + ImageNet weights - pretraining is by far the largest single
+#     gain with only 1,920 training images; ConvNeXt-Tiny beat ResNet-50 at
+#     comparable cost (experiments 5 vs 8).
+#   224 px colour input - the starter's grayscale 64x64 discards colour and
+#     spatial detail that scene classes depend on (experiment 1).
+#   strong augmentation - experiment 5 overfit heavily; RandAugment, colour
+#     jitter and RandomErasing closed most of the train/val gap (experiment 6).
+#   discriminative LR (backbone 1e-4, head 1e-3) - protects pretrained filters
+#     while letting the randomly initialised head move quickly.
+#   cosine schedule + 3 warmup epochs - warmup prevents the untrained head's
+#     large early gradients from damaging the backbone.
+#   label smoothing 0.1 - mild calibration gain, cheap and consistent.
+#   weight EMA - averages away late-training noise; the validation set is only
+#     ~480 images, so single-epoch peaks are unreliable.
+#   horizontal-flip TTA - scenes are close to mirror-symmetric, so flip
+#     averaging is a free variance reduction at inference time.
+#   model selection on validation accuracy only - the test set is touched once.
+experiment:
+  name: best
+  notes: Final submitted recipe. ConvNeXt-Tiny, ImageNet-1k pretrained, fully fine-tuned.
+  seed: 0
+
+data:
+  root: data
+  img_size: 224
+  grayscale: false
+  split: stratified
+  val_fraction: 0.20
+  batch_size: 32
+  num_workers: 4
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+
+augment:
+  preset: strong
+  crop_scale: [0.65, 1.0]
+  mixup_alpha: 0.0
+  cutmix_alpha: 0.0
+
+model:
+  name: convnext_tiny
+  pretrained: true
+  freeze: none
+  dropout: 0.0
+
+optim:
+  optimizer: adamw
+  lr: 0.0001
+  head_lr_mult: 10.0
+  weight_decay: 0.05
+  scheduler: cosine
+  warmup_epochs: 3
+  min_lr: 1.0e-6
+  epochs: 40
+  grad_clip: 1.0
+  label_smoothing: 0.1
+  amp: true
+  ema:
+    enabled: true
+    decay: 0.999
+
+eval:
+  tta: hflip
+  monitor: val_acc
+
+output:
+  root: runs
+  save_best: true

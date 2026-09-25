@@ -1,0 +1,30 @@
+# Experiment 5: does capacity help? Same recipe as 04, bigger backbone.
+# Hypothesis: ResNet-50's richer pretrained features should help, but with 1,920
+# images the extra capacity may simply overfit. Run 04 and 05 back to back with
+# everything else fixed so the answer is attributable to capacity alone.
+experiment:
+  name: 05_resnet50_finetune
+  notes: Capacity ablation against 04_resnet18_finetune; only model.name changes.
+  seed: 0
+
+data:
+  img_size: 224
+  batch_size: 32
+
+augment:
+  preset: basic
+
+model:
+  name: resnet50
+  pretrained: true
+  freeze: none
+
+optim:
+  optimizer: adamw
+  lr: 0.0003
+  head_lr_mult: 10.0
+  weight_decay: 0.05
+  scheduler: cosine
+  warmup_epochs: 2
+  epochs: 30
+  label_smoothing: 0.1

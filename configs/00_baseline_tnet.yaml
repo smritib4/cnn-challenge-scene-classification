@@ -1,0 +1,40 @@
+# Experiment 0: reproduce the starter baseline exactly.
+# Grayscale 64x64, one conv layer, plain Adam, no augmentation, no schedule.
+# Purpose: establish the reference number every later change is measured against.
+experiment:
+  name: 00_baseline_tnet
+  notes: >
+    Verbatim reproduction of the provided starter. Uses the unstratified
+    random_split so the number is directly comparable to the notebook.
+  seed: 0
+
+data:
+  img_size: 64
+  grayscale: true
+  mean: [0.5]
+  std: [0.5]
+  split: random
+  batch_size: 64
+  val_fraction: 0.20
+
+augment:
+  preset: none
+
+model:
+  name: tnet
+  pretrained: false
+
+optim:
+  optimizer: adam
+  lr: 0.002
+  head_lr_mult: 1.0
+  weight_decay: 0.0
+  scheduler: none
+  warmup_epochs: 0
+  epochs: 20
+  grad_clip: 0.0
+  label_smoothing: 0.0
+  amp: false
+
+eval:
+  tta: none
