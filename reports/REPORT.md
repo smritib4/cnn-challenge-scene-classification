@@ -3,217 +3,152 @@
 **Smriti Bhemireddy** · ITCS 6169/8169 Computer Vision, Assignment 1
 **Repository:** https://github.com/smritib4/cnn-challenge-scene-classification
 
----
-
 ## 1. Final Result
 
 | | |
 |---|---|
-| **Test accuracy** | **94.25%** (377/400 images, 25 per class); top-5 100% |
-| Validation accuracy of the selected checkpoint | 95.21% (epoch 20 of 30) |
-| Architecture | ResNet-50, ImageNet-1k pretrained, **all** parameters fine-tuned (23,540,816 trainable) |
-| Input | 224 × 224 RGB |
-| Config / checkpoint | `configs/best.yaml` → `runs/05_resnet50_finetune_seed0/best.pt` |
-| Cost | 352 s on one Tesla T4 (30 epochs) |
+| **Test accuracy** | **94.25%** (377/400; 25 per class), top-5 **100%** |
+| Validation accuracy of selected checkpoint | **95.21%** (epoch 20 of 30) |
+| Architecture | ResNet-50, ImageNet-1k pretrained, all 23.5M parameters fine-tuned |
+| Input / cost | 224 × 224 RGB; 352 s on one Tesla T4 |
+| Reproduce | `python train.py --config configs/best.yaml` → `runs/best_seed0/best.pt` |
 
-Starting point for comparison: the provided starter reaches **49.58%**, so this is a
-**+44.7 pp** improvement, and 100% top-5 means the correct class is never ranked
-outside the top five.
+The provided starter reaches 49.58% under the same protocol, so this is **+44.7 pp**.
 
-**Validation strategy.** The 2,400 training images were split 80/20 into 1,920
-training and 480 validation images using a *stratified* split with a fixed seed, so
-every class contributes exactly 30 validation images. All architecture and
-hyperparameter decisions were made on validation accuracy alone. The 400-image test
-set was scored once, on the single checkpoint already chosen, and never used to
-select between experiments.
-
-Stratification was not cosmetic. Reproducing the starter's unstratified
-`random_split` gave per-class training counts ranging from 115 to 124, whereas the
-stratified split gives exactly 120 for every class. On 480 validation images a 1%
-difference is about five images, so an unbalanced split injects noise of the same
-magnitude as the effects being measured — and because the imbalance is fixed by the
-seed, it biases every experiment in the same direction instead of averaging out.
-
-The dataset also ships a third directory, `test2`: 400 unlabelled images named
-`image_0.jpg`…`image_399.jpg`. Since it has no labels it cannot be scored;
-`predict.py` produces a submission CSV for it, and `scripts/check_split_overlap.py`
-hashes both directories to establish whether it duplicates the labelled test split
-rather than assuming either way.
+**Validation strategy.** The 2,400 training images were split 80/20 into 1,920 train
+and 480 validation images with a **stratified** split at a fixed seed, giving exactly
+30 validation images per class. Every architecture and hyperparameter decision was
+made on validation accuracy alone; the test set was scored **once**, on the
+already-selected checkpoint. Stratification was not cosmetic: reproducing the
+starter's unstratified `random_split` gives per-class train counts from 115 to 124,
+and on 480 validation images a 1% difference is five images — so an unbalanced split
+injects noise as large as the effects being measured, and because it is fixed by the
+seed it biases every experiment the same way instead of averaging out.
 
 ## 2. Secret Recipe
 
-The final recipe is deliberately plain: ResNet-50 with ImageNet-1k weights, every
-parameter fine-tuned, 224 × 224 RGB, basic augmentation (RandomResizedCrop scale
-0.65–1.0 and horizontal flip), AdamW at backbone LR 3e-4 with the head at 10×,
-weight decay 0.05 excluded from biases and normalisation parameters, per-batch
+ResNet-50 with ImageNet-1k weights, fully fine-tuned, 224px RGB, basic augmentation
+(RandomResizedCrop 0.65–1.0 + horizontal flip), AdamW at backbone LR 3e-4 with the
+head at 10×, weight decay 0.05 excluded from biases and norm parameters, per-batch
 cosine schedule with 2 warmup epochs, label smoothing 0.1, 30 epochs.
 
-**What actually mattered, in order of measured effect:**
+**What actually mattered, ranked by measured effect:**
 
-1. **Pretrained features — worth about 32 pp, and nothing else comes close.** A
-   *frozen* ResNet-18 with only a 16-way linear head trained on top — 8,208
-   trainable parameters — reaches **91.04%**. That single number is the result of
-   this assignment: at 1,920 training images the task is mostly a question of
-   whether you start from good features, not what you build on them.
-2. **Input resolution and colour — worth 8.8 pp before touching the architecture.**
-   Feeding the starter's own one-layer network colour at 128px instead of grayscale
-   at 64px took it from 49.58% to 58.75%. The starter's preprocessing, not its
-   capacity, was its first bottleneck.
-3. **Fine-tuning the backbone — worth 3.4 pp.** Unfreezing takes the ResNet-18 from
-   91.04% to 94.58%, i.e. 1,360× more trainable parameters buys a tenth of what the
-   pretrained initialisation already gave. Scene classes are close enough to
-   ImageNet categories that adaptation is a refinement, not a necessity.
-4. **Capacity — worth about 0.6 pp, at the edge of measurability.** ResNet-50
-   reaches 95.21% against ResNet-18's 94.58%: a real but small gain, and only barely
-   outside the 0.62 pp noise floor established in section 3.
+1. **Pretrained features: ~32 pp, and nothing else is close.** A *frozen* ResNet-18
+   with only a 16-way linear head — **8,208** trainable parameters — reaches
+   **91.04%**. That is the result of this assignment: at this data scale the task is
+   almost entirely a question of whether you start from good features.
+2. **Resolution and colour: 8.8 pp, before changing the architecture.** Giving the
+   starter's own one-layer network colour at 128px instead of grayscale at 64px took
+   it from 49.58% to 58.75%. Its preprocessing, not its capacity, was the first
+   bottleneck.
+3. **Fine-tuning the backbone: 3.4 pp.** Unfreezing takes ResNet-18 from 91.04% to
+   94.58% — 1,360× more trainable parameters for a tenth of what the pretrained
+   initialisation already provided.
+4. **Capacity: 0.63 pp, barely measurable.** ResNet-50's 95.21% over ResNet-18's
+   94.58% is only just outside the noise floor below.
 
-**What did not matter:** strong augmentation (section 4), and — on this data — the
-variance reducers. Weight EMA and horizontal-flip TTA are both implemented and
-configurable, but the selected model uses neither, because in the runs where EMA was
-enabled the plain weights were selected anyway. I am reporting them as "available
-and not helpful here" rather than including them for appearance.
+**What did not matter:** strong augmentation (§4), and the variance reducers. Weight
+EMA and flip TTA are implemented and were exercised, but the selected model uses
+neither — where EMA was enabled the plain weights won selection anyway. I report them
+as available and unhelpful here rather than including them for appearance.
 
 ## 3. Experimental Journey
 
-Each row changes approximately one factor from the row above, so differences are
-attributable. Generated by `scripts/make_report_table.py` from recorded runs.
+Each row changes roughly one factor. Two numbers = the same configuration run twice
+at the **same seed**, which is how the noise floor was measured.
 
-Each experiment below was run twice at seed 0. The two numbers are reported
-because they quantify the noise floor, which turns out to be the key to reading
-this table at all (see the note beneath it).
-
-| # | Experiment | What changed | Trainable params | Val acc (%) | Observation |
+| # | Experiment | Change | Params | Val acc (%) | Observation |
 |---|---|---|---:|---:|---|
-| 00 | Starter TNet, grayscale 64px | reference | 57.8K | 49.58 / 49.58 | Matches the handout's "under ~50%" baseline |
-| 01 | + colour, 128px | preprocessing only, same architecture | 246.5K | 58.75 / 58.13 | **+8.8 pp for free.** The starter's grayscale 64×64 preprocessing, not its capacity, was the first bottleneck |
-| 03 | ResNet-18 **linear probe** | ImageNet weights frozen | **8.2K** | 91.04 / 90.83 | **+32.4 pp while training 8,208 parameters.** Frozen generic ImageNet features are almost sufficient for this task |
-| 04 | ResNet-18 fine-tuned | unfreeze backbone | 11.2M | 94.58 / 93.96 | +3.4 pp for 1,360× more trainable parameters |
-| 02 | Modern CNN **from scratch** | no ImageNet weights, 60 epochs | 4.7M | 89.38 | **The pretraining control.** An 8-conv net with BatchNorm and GAP, trained from random init, lands 1.7 pp *below* the frozen 8.2K-parameter probe while using 572× the parameters and 2.4× the time |
-| 05 | **ResNet-50 fine-tuned** | capacity only | 23.5M | **95.21** | Best completed run; selected. +0.63 pp over ResNet-18, just outside the noise floor |
-| 06 | + strong augmentation | augmentation preset only, 40 epochs | 23.5M | 94.38 | −0.8 pp. No gain, and the reasoning behind it was wrong (section 4) |
-| 07 | + mixup / CutMix | label-space regularisation | 23.5M | *not run* | Killed at epoch 0 by a session interrupt; excluded rather than reported |
-| 08 | ConvNeXt-Tiny | architecture family | 27.8M | (97.29) | Reached 97.29% at epoch 34 but the run never completed, so it was **not** eligible for selection — see below |
+| 00 | Starter TNet, gray 64px | reference | 57.8K | 49.58 / 49.58 | Matches the stated "<50%" baseline |
+| 01 | + colour, 128px | preprocessing only | 246.5K | 58.75 / 58.13 | +8.8 pp for free |
+| 03 | ResNet-18 **linear probe** | ImageNet weights frozen | **8.2K** | 91.04 / 90.83 | +32.4 pp training 8,208 parameters |
+| 04 | ResNet-18 fine-tuned | unfreeze backbone | 11.2M | 94.58 / 93.96 | +3.4 pp for 1,360× the parameters |
+| 02 | Modern CNN **from scratch** | no ImageNet weights, 60 ep | 4.7M | 89.38 | **Pretraining control:** lands 1.7 pp *below* the 8.2K frozen probe, using 572× the parameters |
+| 05 | **ResNet-50 fine-tuned** | capacity only | 23.5M | **95.21** | Selected. Best completed run |
+| 06 | + strong augmentation | preset only, 40 ep | 23.5M | 94.38 | −0.83 pp; the reasoning was wrong (§4) |
+| 08 | ConvNeXt-Tiny | architecture family | 27.8M | (97.29) | Run never completed → not eligible |
 
-**The noise floor governs every conclusion here.** Repeating an experiment at the
-same seed gave 94.58% and 93.96% — a 0.62 pp spread, or 3 of 480 validation images.
-Identical seeds do not reproduce bitwise on GPU because cuDNN benchmarking selects
-algorithms non-deterministically and reduction orders vary. Consequently the 0.2 pp
-between the best ResNet-18 (94.58%) and ResNet-50 with strong augmentation (94.38%)
-carries no information. Any single-run claim smaller than roughly 1 pp on this
-validation set is unsupported, which is why the table reports repeats rather than
-best-of.
+**The noise floor governs every conclusion here.** Repeating a configuration at a
+fixed seed gave 94.58% and 93.96% — a **0.62 pp** spread, 3 of 480 images. Identical
+seeds do not reproduce bitwise on GPU: cuDNN benchmarking picks algorithms by runtime
+timing and reduction orders differ between them. So any single-run claim below ~1 pp
+is unsupported, which is why this table reports repeats rather than best-of.
+Accuracy also plainly **saturates near 95%**: experiment 06 sat at 0.93–0.94 from
+epoch 13 to 40 while train loss flattened at 0.568, essentially the label-smoothing
+floor.
 
-The practical reading: **accuracy saturates near 94–95%.** Experiment 06 held
-0.93–0.94 from epoch 13 through 40 while train loss flattened at 0.568 — close to
-the floor imposed by label smoothing 0.1, i.e. the training set was essentially
-fit. Past the point where pretrained features are adapted, neither capacity,
-augmentation strength, nor schedule length moves the number much.
+**A selection decision to be explicit about.** ConvNeXt-Tiny reached 97.29%
+validation — higher than what I am submitting. It is excluded because the run never
+finished, and my selection rule, fixed in advance, was best validation accuracy among
+*completed* runs. Quoting an unfinished run's peak epoch is exactly the best-of-N
+cherry-picking the noise-floor analysis argues against. It is recorded as the most
+promising direction, not as a claimed result.
 
-**A selection decision I want to be explicit about.** The ConvNeXt-Tiny run reached
-97.29% validation, which is higher than the model I am submitting. It is not the
-submitted model because it never finished: the session was interrupted before
-`train.py` wrote its summary, so under the selection rule I fixed in advance — best
-validation accuracy among *completed* runs — it was not eligible. Reporting an
-unfinished run's peak epoch as a result would be exactly the kind of best-of-N
-cherry-picking that the noise-floor analysis above argues against. I am recording it
-here because it is the most likely direction for improvement, not because it is a
-result I am claiming.
-
-**Where the remaining 5.75% lives.** On the test set, 7 of 16 classes are perfect
-and every error is a confusion between semantically adjacent scenes: Kitchen 76%
-(mostly → Bedroom), Industrial 84% (→ LivingRoom), Mountain 88% (→ OpenCountry),
-then Bedroom, InsideCity, LivingRoom and OpenCountry at 92%. Indoor rooms account
-for 12 of the 23 total errors. These are categories that share objects and layout,
-so the residual error is concentrated exactly where a *scene*-level label is
-genuinely ambiguous — which is further evidence that generic augmentation or extra
-capacity is not the missing ingredient.
+**Where the remaining 5.75% lives.** Seven of 16 test classes are perfect. Every
+error is a confusion between adjacent scenes: Kitchen 76% (→ Bedroom), Industrial 84%
+(→ LivingRoom), Mountain 88% (→ OpenCountry), then Bedroom, InsideCity, LivingRoom,
+OpenCountry at 92%. Indoor rooms are 12 of the 23 errors — categories sharing objects
+and layout, where a *scene* label is genuinely ambiguous. More capacity or generic
+augmentation is not the missing ingredient.
 
 ## 4. Failure Analysis
 
-### Strong augmentation did not help, and the diagnosis was wrong
+**Strong augmentation failed, and my diagnosis was wrong.**
 
-**What I tried.** Experiment 06 added RandAugment (2 ops, magnitude 9), colour
-jitter and RandomErasing to the ResNet-50 recipe, and extended training from 30 to
-40 epochs to let the harder objective converge.
+*What I tried.* Experiment 06 added RandAugment (2 ops, magnitude 9), colour jitter
+and RandomErasing to the ResNet-50 recipe, extending training to 40 epochs.
 
-**Why I expected it to work.** 1,920 training images against a 23.5M-parameter
-network is a textbook overfitting setup, and experiment 05 appeared to confirm it:
-validation accuracy peaked at epoch 2 and then *declined* while training loss kept
-falling. Stronger augmentation is the standard remedy.
+*Why I expected it to work.* 1,920 images against 23.5M parameters is a textbook
+overfitting setup, and experiment 05 appeared to confirm it: validation accuracy
+peaked early and then declined while train loss kept falling.
 
-**What happened.** 94.38%, against 95.21% for the *same* ResNet-50 with only basic
-augmentation and 30 epochs instead of 40. Strong augmentation cost 0.83 pp and a
-third more training time, and left the model no better than a ResNet-18 with half
-the parameters.
+*What happened.* 94.38% against 95.21% for the same network with basic augmentation
+and ten fewer epochs — it cost 0.83 pp and a third more compute.
 
-**What I learned.** The early-peak-then-decline pattern is not sufficient evidence
-of the *kind* of overfitting augmentation fixes. What actually happens is that
-pretrained features are already close to optimal for these classes, so the useful
-work finishes within a couple of epochs; everything after that is the head fitting
-residual noise, and the validation metric wanders inside its own noise floor. Pixel
-augmentation cannot help because the limitation is not input diversity. Comparing
-train and validation loss curves rather than the accuracy trace would have shown
-this before spending the run: train loss plateaued at the label-smoothing floor, so
-the model was not straining against a hard objective.
+*What I learned.* Early-peak-then-decline is not evidence of the kind of overfitting
+augmentation fixes. Pretrained features are already near-optimal for these classes,
+so useful adaptation finishes in a few epochs; after that the head fits residual
+noise and validation wanders inside its own noise floor. Pixel augmentation cannot
+help when input diversity was never the constraint. The **loss** curves showed this
+where the accuracy trace hid it: train loss had already flattened at the
+label-smoothing floor. The broader lesson is ordering — I measured before
+establishing the noise floor, so a 0.62 pp wobble read as signal. Establishing it
+first would have redirected the run toward per-class error analysis, where the
+remaining error actually is.
 
-The broader lesson is about measurement discipline. Before augmentation was tried,
-the apparent decline from 93.96% at epoch 2 looked like a clear signal. Once the
-same configuration was run twice and produced a 0.62 pp spread at a *fixed seed*,
-most of what looked like signal turned out to be noise. Establishing that floor
-first would have redirected the effort toward per-class error analysis, where the
-remaining 6% actually lives.
-
-### Two bugs that silently corrupted results
-
-`TNet` was first written with `nn.LazyLinear` to adapt to any input resolution. Lazy
-parameters do not exist until the first forward pass, so `train.py` crashed while
-counting parameters — and because the smoke test used `resnet18`, the failure only
-surfaced on the GPU. `scripts/check_models.py` now builds all 16
-model/resolution/freeze combinations in the order `train.py` uses them, counting
-parameters *before* the forward pass, which is the only order that reproduces it.
-
-More dangerous, because it did not crash: the results writer took its column order
-from the row being written while the header on disk came from an earlier schema, so
-after I added `epochs_completed` and `interrupted` every new row landed two fields
-off. The reported table showed a validation accuracy of 2,354,081,600% — a parameter
-count read as an accuracy — and the "pick the best run" logic duly selected the row
-with the largest garbage number. It happened to pick the right model, which is the
-uncomfortable part: the pipeline produced a defensible answer for an indefensible
-reason. Appending to a CSV whose header you did not write in the same execution is
-unsafe, and the writer now compares against the on-disk header and migrates the file
-when the columns differ.
+**A second failure, worse because it did not crash.** The results writer took its
+column order from the row being written while the header on disk came from an earlier
+schema, so after I added `epochs_completed` and `interrupted`, every new row landed
+two fields off. The reported table showed a validation accuracy of 2,354,081,600% — a
+parameter count read as an accuracy — and "pick the best run" selected the largest
+garbage number. It happened to choose the correct model, which is the uncomfortable
+part: a defensible answer for an indefensible reason. The writer now compares against
+the on-disk header and migrates the file when columns differ.
 
 ## 5. AI + Human
 
-**Where AI helped.** Cursor implemented the config system, argparse plumbing, the
-per-family classifier-head replacement across torchvision architectures, and the
-plotting utilities. It also wrote a throwaway script that zlib-decompressed the
-assignment PDF's object streams to recover the dataset link, which plain text
-extraction had missed.
+**Where AI helped.** Cursor wrote the config system, argparse plumbing, the
+per-family classifier-head replacement across torchvision backbones, and the plotting
+utilities. It also produced a throwaway script that zlib-decompressed the assignment
+PDF's object streams to recover the dataset link, which plain text extraction missed.
 
-**Where my judgement was required.** Asked to fetch the dataset, the assistant
-started a `gdown --folder` crawl that downloaded images one HTTP request at a time.
-It was working, and it would have taken about two hours and risked rate-limiting. I
-killed it and downloaded the folder as a single archive, keeping reproducibility
-through `scripts/prepare_data.py`, which unpacks whatever archive you have *and
-verifies it* — per-class counts, matching class names across splits, and a warning if
-the training total is not 2,400. Verification is worth more than a scripted download
-that is slow and fragile. The general lesson: an agent optimises for "the code runs",
-which is not the same as "this is the right approach."
+**Where my judgement was required.** Asked to fetch the dataset, it started a
+`gdown --folder` crawl pulling images one HTTP request at a time. The code *worked* —
+and would have taken two hours with rate-limiting risk. I killed it and fetched the
+folder as one archive, keeping reproducibility in `scripts/prepare_data.py`, which
+unpacks whatever archive you have and then *verifies* it: per-class counts, class
+names matching across splits, and a warning if the training total is not 2,400.
+Verification is worth more than a scripted download that is slow and fragile. I also
+rejected the `random_split` that the starter uses and that generated code reproduces
+by default, for the measurement reasons in §1. The recurring pattern: an assistant
+optimises for "the code runs", which is not "this is the right approach."
 
-I also rejected the `random_split` pattern that the starter uses and that generated
-code reproduces by default, replacing it with a stratified split for the measurement
-reasons in section 1.
-
-Full detail in `AI_USAGE.md`.
+Full detail, including three further cases where suggestions were wrong, is in
+`AI_USAGE.md`.
 
 ---
 
-### References
-
-- He et al., *Deep Residual Learning for Image Recognition*, CVPR 2016.
-- Liu et al., *A ConvNet for the 2020s*, CVPR 2022.
-- Cubuk et al., *RandAugment: Practical Automated Data Augmentation*, NeurIPS 2020.
-- Zhang et al., *mixup: Beyond Empirical Risk Minimization*, ICLR 2018.
-- Yun et al., *CutMix*, ICCV 2019.
-- Loshchilov & Hutter, *Decoupled Weight Decay Regularization*, ICLR 2019.
+*References:* He et al., *Deep Residual Learning*, CVPR 2016 · Liu et al., *A ConvNet
+for the 2020s*, CVPR 2022 · Cubuk et al., *RandAugment*, NeurIPS 2020 · Loshchilov &
+Hutter, *Decoupled Weight Decay Regularization*, ICLR 2019.

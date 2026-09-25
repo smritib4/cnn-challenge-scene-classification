@@ -8,9 +8,10 @@ images. The provided starter is a single-convolution network on grayscale 64×64
 inputs that reaches under ~50% validation accuracy. This repository builds a
 substantially stronger CNN system through controlled experiments.
 
-> **Status:** final model runs in progress. Tables are generated from
-> `experiments/results/results.csv`, which `train.py` writes automatically — see
-> `scripts/make_report_table.py`. Rows marked _pending_ have not finished yet.
+All tables below are generated from `experiments/results/results.csv`, which
+`train.py` writes automatically — render them with `scripts/make_report_table.py`.
+Per-run epoch histories, merged configs and summaries are archived under
+[`experiments/run_logs/`](experiments/run_logs).
 
 ---
 
@@ -18,16 +19,17 @@ substantially stronger CNN system through controlled experiments.
 
 | Metric | Value |
 |---|---|
-| **Test accuracy (final model)** | _pending_ |
-| Validation accuracy (selected checkpoint) | _pending_ |
-| Best validation accuracy so far | **94.58%** (ResNet-18, fine-tuned, basic augmentation) |
+| **Test accuracy (final model)** | **94.25%** — 377/400 images; top-5 **100%** |
+| Validation accuracy (selected checkpoint) | **95.21%** (epoch 20 of 30) |
+| Architecture | ResNet-50, ImageNet-1k pretrained, all 23,540,816 parameters fine-tuned |
 | Input resolution | 224 × 224 RGB |
 | Validation strategy | Stratified 80/20 split of the 2,400 training images (seed 0), exactly 30 validation images per class |
 | Measured noise floor | **±0.62 pp** between repeats at a fixed seed |
 | Config | [`configs/best.yaml`](configs/best.yaml) |
-| Checkpoint | _pending_ |
+| Checkpoint | `runs/best_seed0/best.pt` (see [§8](#8-checkpoint)) |
+| Starter baseline | 49.58% under the same protocol → **+44.7 pp** |
 
-The test set is used **once**, to score the single checkpoint already selected on
+The test set was scored **once**, on the single checkpoint already selected on
 validation accuracy. `train.py` does not touch the test set unless
 `--evaluate-test` is passed explicitly.
 
@@ -37,13 +39,15 @@ validation accuracy. `train.py` does not touch the test set unless
 ResNet-18's convolutional weights and training only the 16-way head takes the
 starter's 49.58% to 90.83–91.04%. Generic ImageNet features are very nearly
 sufficient for this task; full fine-tuning of 11.2M parameters — 1,360× more —
-adds 3.4 points.
+adds 3.4 points. The from-scratch control makes the same point from the other
+direction: a modern 8-conv network with BatchNorm and global average pooling,
+trained from random initialisation for 60 epochs, reaches 89.38% — *below* the
+frozen probe, with 572× the trainable parameters.
 
-**Accuracy saturates near 94%, and nothing after that helps.** ResNet-50 with
-strong augmentation (23.5M parameters, RandAugment, 40 epochs) scored 94.38%,
-slightly *below* a plain fine-tuned ResNet-18 at 94.58%. Validation accuracy sat
-in 0.93–0.94 from epoch 13 to 40 while train loss flattened at the
-label-smoothing floor.
+**Accuracy saturates near 95%, and extra machinery stops helping.** ResNet-50 with
+strong augmentation (RandAugment, 40 epochs) scored 94.38%, *below* the same
+network with basic augmentation at 95.21%. Validation accuracy sat in 0.93–0.94
+from epoch 13 to 40 while train loss flattened at the label-smoothing floor.
 
 **The noise floor is 0.62 pp, so most small differences are not real.** Repeating
 the same config at the same seed gave 94.58% and 93.96%, a spread of 3 images out
@@ -159,12 +163,26 @@ floor above was measured.
 | 01 | + colour, 128px | Preprocessing only, same architecture | 246.5K | 58.75 / 58.13 | +8.8 pp for free; preprocessing was the first bottleneck, not capacity |
 | 03 | ResNet-18 linear probe | ImageNet weights frozen | **8.2K** | 91.04 / 90.83 | +32.4 pp training 8,208 parameters |
 | 04 | ResNet-18 fine-tuned | Unfreeze backbone | 11.2M | 94.58 / 93.96 | +3.4 pp for 1,360× the trainable parameters |
-| 05 | ResNet-50 fine-tuned | Capacity only | 23.5M | _pending_ | _pending_ |
-| 06 | + strong augmentation | `augment.preset` only | 23.5M | 94.38 | No gain; the diagnosis behind it was wrong (see failure analysis) |
-| 02 | Modern CNN from scratch | No ImageNet weights | 4.7M | _pending_ | Isolates pretraining from architecture |
-| 07 | + mixup / cutmix | Label-space regularisation | 23.5M | _pending_ | _pending_ |
-| 08 | ConvNeXt-Tiny | Architecture family | 27.8M | _pending_ | _pending_ |
-| — | **Final (best.yaml)** | + EMA + flip TTA | _pending_ | _pending_ | _pending_ |
+| 02 | Modern CNN from scratch | No ImageNet weights, 60 epochs | 4.7M | 89.38 | Below the 8.2K frozen probe, with 572× the parameters |
+| 05 | **ResNet-50 fine-tuned** | Capacity only | 23.5M | **95.21** | Selected as the final model; test 94.25% |
+| 06 | + strong augmentation | `augment.preset` only, 40 epochs | 23.5M | 94.38 | −0.83 pp; the diagnosis behind it was wrong (see failure analysis) |
+| 07 | + mixup / cutmix | Label-space regularisation | 23.5M | _not run_ | Killed at epoch 0 by a session interrupt; excluded rather than reported |
+| 08 | ConvNeXt-Tiny | Architecture family | 27.8M | (97.29) | Reached 97.29% at epoch 34 but never completed, so it was not eligible for selection |
+
+**Why the 97.29% run is not the submitted model.** Selection was fixed in advance as
+best validation accuracy among *completed* runs. The ConvNeXt-Tiny session was
+interrupted before `train.py` wrote its summary, so it has 35 epochs of history and no
+result row. Quoting an unfinished run's peak epoch as a result is the best-of-N
+cherry-picking that the noise-floor measurement above argues against. It is recorded
+as the most promising next direction, not as a claimed number.
+`scripts/pick_best_checkpoint.py` ranks runs from `history.jsonl` precisely so that
+runs invisible to `results.csv` are still visible to a human.
+
+**Where the remaining error is.** Seven of 16 test classes are perfect. All errors are
+confusions between adjacent scenes — Kitchen 76% (→ Bedroom), Industrial 84%
+(→ LivingRoom), Mountain 88% (→ OpenCountry) — with indoor rooms accounting for 12 of
+the 23 total errors. Full breakdown in [`reports/final_test_report.json`](reports/final_test_report.json)
+and [`reports/final_confusion_matrix.png`](reports/final_confusion_matrix.png).
 
 Regenerate this table from the recorded runs at any time:
 
