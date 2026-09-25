@@ -312,66 +312,82 @@ def fit(
     epochs_without_improvement = 0
     history: list[dict[str, Any]] = []
     start = time.time()
+    interrupted = False
 
-    for epoch in range(1, epochs + 1):
-        train_stats = train_one_epoch(
+    # Interruption is treated as "stop early", not "throw the run away". Colab
+    # disconnects and manual interrupts are routine, and losing a 20-minute run
+    # because the process died between epochs is avoidable: the best-so-far weights
+    # are already in memory, so they are returned and saved as usual. Runs that end
+    # this way are flagged so a short run is never silently compared against a full
+    # one in the results table.
+    try:
+        for epoch in range(1, epochs + 1):
+            train_stats = train_one_epoch(
             model,
             train_loader,
             criterion,
             optimizer,
-            device,
-            scaler,
-            scheduler,
-            cfg["augment"],
-            float(optim_cfg.get("grad_clip", 0.0) or 0.0),
-            rng,
-            ema,
-        )
-        val_stats = evaluate(model, val_loader, device, criterion, tta=tta)
-        record = {
-            "epoch": epoch,
-            **train_stats,
-            "val_loss": val_stats["loss"],
-            "val_acc": val_stats["acc"],
-            "val_top5": val_stats["top5_acc"],
-            "elapsed_s": round(time.time() - start, 1),
-        }
+                device,
+                scaler,
+                scheduler,
+                cfg["augment"],
+                float(optim_cfg.get("grad_clip", 0.0) or 0.0),
+                rng,
+                ema,
+            )
+            val_stats = evaluate(model, val_loader, device, criterion, tta=tta)
+            record = {
+                "epoch": epoch,
+                **train_stats,
+                "val_loss": val_stats["loss"],
+                "val_acc": val_stats["acc"],
+                "val_top5": val_stats["top5_acc"],
+                "elapsed_s": round(time.time() - start, 1),
+            }
 
-        # When EMA is on, both candidates are scored and the better one is kept.
-        candidate_acc = val_stats["acc"]
-        candidate_state = model.state_dict()
-        used_ema = False
-        if ema is not None:
-            ema_stats = evaluate(ema.module, val_loader, device, criterion, tta=tta)
-            record["val_acc_ema"] = ema_stats["acc"]
-            if ema_stats["acc"] > candidate_acc:
-                candidate_acc = ema_stats["acc"]
-                candidate_state = ema.module.state_dict()
-                used_ema = True
+            # When EMA is on, both candidates are scored and the better one is kept.
+            candidate_acc = val_stats["acc"]
+            candidate_state = model.state_dict()
+            used_ema = False
+            if ema is not None:
+                ema_stats = evaluate(ema.module, val_loader, device, criterion, tta=tta)
+                record["val_acc_ema"] = ema_stats["acc"]
+                if ema_stats["acc"] > candidate_acc:
+                    candidate_acc = ema_stats["acc"]
+                    candidate_state = ema.module.state_dict()
+                    used_ema = True
 
-        if candidate_acc > best_acc:
-            best_acc = candidate_acc
-            best_state = copy.deepcopy(candidate_state)
-            best_epoch = epoch
-            best_used_ema = used_ema
-            epochs_without_improvement = 0
-        else:
-            epochs_without_improvement += 1
+            if candidate_acc > best_acc:
+                best_acc = candidate_acc
+                best_state = copy.deepcopy(candidate_state)
+                best_epoch = epoch
+                best_used_ema = used_ema
+                epochs_without_improvement = 0
+            else:
+                epochs_without_improvement += 1
 
-        record["best_val_acc"] = best_acc
-        history.append(record)
+            record["best_val_acc"] = best_acc
+            history.append(record)
+            print(
+                f"epoch {epoch:03d}/{epochs} | lr {record['lr']:.2e} | "
+                f"train loss {record['train_loss']:.4f} | val loss {record['val_loss']:.4f} | "
+                f"val acc {record['val_acc']:.4f} | best {best_acc:.4f} | {record['elapsed_s']:.0f}s",
+                flush=True,
+            )
+            if on_epoch_end is not None:
+                on_epoch_end(record)
+
+            if patience and epochs_without_improvement >= patience:
+                print(f"Early stopping: no improvement for {patience} epochs.")
+                break
+    except KeyboardInterrupt:
+        interrupted = True
         print(
-            f"epoch {epoch:03d}/{epochs} | lr {record['lr']:.2e} | "
-            f"train loss {record['train_loss']:.4f} | val loss {record['val_loss']:.4f} | "
-            f"val acc {record['val_acc']:.4f} | best {best_acc:.4f} | {record['elapsed_s']:.0f}s",
+            f"\nInterrupted after {len(history)} of {epochs} epochs. "
+            f"Keeping the best checkpoint so far (val acc {best_acc:.4f} at epoch {best_epoch}).\n"
+            "This run is flagged as incomplete: do not compare it against a full run.",
             flush=True,
         )
-        if on_epoch_end is not None:
-            on_epoch_end(record)
-
-        if patience and epochs_without_improvement >= patience:
-            print(f"Early stopping: no improvement for {patience} epochs.")
-            break
 
     model.load_state_dict(best_state)
     return {
@@ -381,4 +397,6 @@ def fit(
         "best_epoch": best_epoch,
         "best_used_ema": best_used_ema,
         "train_time_s": round(time.time() - start, 1),
+        "epochs_completed": len(history),
+        "interrupted": interrupted,
     }

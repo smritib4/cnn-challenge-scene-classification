@@ -86,15 +86,23 @@ def main() -> None:
             print(f"| {name} | {len(values)} | {mean:.2f} | {spread_text} |")
         return
 
+    incomplete = [r for r in rows if str(r.get("interrupted", "")).lower() == "true"]
+
     print("| Experiment | Model | Res | Aug | Epochs | Params | Best ep | Val acc (%) | Test acc (%) | Time |")
     print("|---|---|---:|---|---:|---:|---:|---:|---:|---:|")
     for row in rows:
+        # An interrupted run trained for fewer epochs than its config specifies, so
+        # the epoch column shows what actually ran and the row is flagged.
+        was_interrupted = str(row.get("interrupted", "")).lower() == "true"
+        epochs_text = row["epochs"]
+        if was_interrupted:
+            epochs_text = f"{row.get('epochs_completed', '?')}/{row['epochs']} (cut short)"
         print(
-            f"| {row['experiment']} "
+            f"| {row['experiment']}{' **incomplete**' if was_interrupted else ''} "
             f"| {row['model']}{'' if row.get('pretrained') == 'True' else ' (scratch)'} "
             f"| {row['img_size']} "
             f"| {row['augment']} "
-            f"| {row['epochs']} "
+            f"| {epochs_text} "
             f"| {fmt_params(row.get('params', ''))} "
             f"| {row.get('best_epoch', '-')} "
             f"| {fmt_pct(row.get('val_acc', ''))} "
@@ -102,11 +110,23 @@ def main() -> None:
             f"| {fmt_time(row.get('train_time_s', ''))} |"
         )
 
-    scored = [r for r in rows if r.get("val_acc")]
+    if incomplete:
+        print(
+            f"\nWARNING: {len(incomplete)} run(s) ended early "
+            f"({', '.join(r['experiment'] for r in incomplete)}). Their accuracy is not "
+            "comparable to a full-length run; re-run before citing them."
+        )
+
+    # Only complete runs are eligible to be called best.
+    scored = [
+        r
+        for r in rows
+        if r.get("val_acc") and str(r.get("interrupted", "")).lower() != "true"
+    ]
     if scored:
         best = max(scored, key=lambda r: float(r["val_acc"]))
         print(
-            f"\nBest by validation accuracy: {best['experiment']} "
+            f"\nBest by validation accuracy (complete runs only): {best['experiment']} "
             f"({fmt_pct(best['val_acc'])}%), run dir {best.get('run_dir', '?')}"
         )
 
