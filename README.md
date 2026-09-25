@@ -300,7 +300,14 @@ The submitted checkpoint is `best_seed1/best.pt` — ConvNeXt-Tiny, 27.8M parame
 111 MB. That is past GitHub's file-size limit for normal tracking, so it is hosted
 outside the repository:
 
-**Download:** _link to be added_
+**Download:** https://drive.google.com/file/d/1Lmb3TFUiCWvDsYJ6i210LCZ9jDLHIwVd/view?usp=sharing
+
+Or fetch it from the command line:
+
+```bash
+pip install gdown
+gdown 1Lmb3TFUiCWvDsYJ6i210LCZ9jDLHIwVd -O best.pt
+```
 
 The checkpoint is self-describing: it embeds the full config it was trained with, the
 class ordering, and an environment snapshot, so evaluation rebuilds the exact
