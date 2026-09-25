@@ -277,7 +277,10 @@ python scripts/plot_history.py --runs runs/05_resnet50_finetune_seed0 runs/06_re
   bitwise determinism.
 - Every checkpoint embeds its config, class ordering, and an environment snapshot
   (Python, OS, torch/torchvision versions, CUDA version, GPU name, git commit).
-- Verified environment: Python 3.14.2, torch 2.14.0, torchvision 0.29.0.
+- Environment the reported results were produced on, captured automatically into every
+  checkpoint and summary: Python 3.13.15, torch 2.11.0+cu128, torchvision 0.26.0+cu128,
+  CUDA 12.8, Tesla T4, Linux 6.6.122. See any
+  `experiments/run_logs/*/summary.json` for the exact snapshot of a given run.
 
 Pipeline verification without the real dataset:
 
@@ -291,14 +294,54 @@ TTA code paths, so pipeline bugs surface before GPU time is spent.
 
 ---
 
-## 8. AI usage
+## 8. Checkpoint
+
+The submitted checkpoint is `best_seed1/best.pt` — ConvNeXt-Tiny, 27.8M parameters,
+111 MB. That is past GitHub's file-size limit for normal tracking, so it is hosted
+outside the repository:
+
+**Download:** _link to be added_
+
+The checkpoint is self-describing: it embeds the full config it was trained with, the
+class ordering, and an environment snapshot, so evaluation rebuilds the exact
+preprocessing rather than relying on flags passed at the command line.
+
+```bash
+python evaluate.py --checkpoint path/to/best.pt --split test --test-dir test
+```
+
+If you would rather retrain than download, `configs/best.yaml` reproduces it in about
+14 minutes on a single T4:
+
+```bash
+python train.py --config configs/best.yaml
+```
+
+---
+
+## 9. AI usage
 
 See [`AI_USAGE.md`](AI_USAGE.md).
 
-## 9. Model restrictions
+## 10. Model restrictions
 
 The primary classifier is a convolutional network throughout, as required. No
 CLIP, DINO/DINOv2, Vision Transformer, or vision-language model is used anywhere
 in the pipeline. The only pretrained weights are ImageNet-1k classification
 weights distributed with torchvision; what was pretrained and which parameters
 were fine-tuned is stated in section 4.
+
+---
+
+## 11. Submission checklist
+
+| Requirement | Where |
+|---|---|
+| `README.md` | this file |
+| `AI_USAGE.md` | [`AI_USAGE.md`](AI_USAGE.md) |
+| Training / model code | [`train.py`](train.py), [`src/cnn_challenge/`](src/cnn_challenge) |
+| Inference / evaluation code | [`evaluate.py`](evaluate.py), [`predict.py`](predict.py) |
+| Environment information | [`requirements.txt`](requirements.txt), section 7 |
+| Final checkpoint or link | section 8 |
+| Reproduction instructions | sections 2 and 7 |
+| Two-page PDF report | [`reports/REPORT.pdf`](reports/REPORT.pdf) |
