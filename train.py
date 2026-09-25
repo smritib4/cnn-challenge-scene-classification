@@ -57,16 +57,23 @@ def parse_args() -> argparse.Namespace:
         help="Also score the held-out test set. Use only for a final, already-selected model.",
     )
     parser.add_argument("--deterministic", action="store_true", help="Force deterministic cuDNN kernels")
+    parser.add_argument(
+        "--results-csv",
+        type=str,
+        default=str(RESULTS_CSV),
+        help="Where to append the run summary row. Redirect this for throwaway runs so "
+        "they cannot contaminate the reported experiment table.",
+    )
     return parser.parse_args()
 
 
-def append_result_row(row: dict[str, object]) -> None:
+def append_result_row(row: dict[str, object], path: Path) -> None:
     """Append one line per run to a CSV so the experiment table stays honest."""
     import csv
 
-    RESULTS_CSV.parent.mkdir(parents=True, exist_ok=True)
-    write_header = not RESULTS_CSV.exists()
-    with open(RESULTS_CSV, "a", newline="", encoding="utf-8") as handle:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_header = not path.exists()
+    with open(path, "a", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(row))
         if write_header:
             writer.writeheader()
@@ -171,7 +178,8 @@ def main() -> None:
             "test_acc": summary.get("test_acc", ""),
             "train_time_s": summary["train_time_s"],
             "run_dir": str(run.path),
-        }
+        },
+        Path(args.results_csv),
     )
     print(f"Summary written to {run.summary_path}")
 
