@@ -6,7 +6,7 @@ data_dummy/
 
 # Checkpoints and run artifacts
 checkpoints/
-runs/
+runs*/
 outputs/
 *.pt
 *.pth
