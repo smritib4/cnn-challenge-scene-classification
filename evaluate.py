@@ -30,6 +30,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--checkpoint", type=str, required=True)
     parser.add_argument("--split", choices=["val", "test"], default="test")
     parser.add_argument("--data-root", type=str, default=None)
+    parser.add_argument(
+        "--test-dir",
+        type=str,
+        default=None,
+        help="Which subdirectory of data.root is the test split (this dataset ships "
+        "both 'test' and 'test2')",
+    )
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--tta", choices=["none", "hflip"], default=None, help="Override eval.tta")
     parser.add_argument("--batch-size", type=int, default=None)
@@ -109,6 +116,8 @@ def main() -> None:
     overrides = []
     if args.data_root:
         overrides.append(f"data.root={args.data_root}")
+    if args.test_dir:
+        overrides.append(f"data.test_dir={args.test_dir}")
     if args.tta:
         overrides.append(f"eval.tta={args.tta}")
     if args.batch_size:
@@ -143,8 +152,9 @@ def main() -> None:
     targets = stats["targets"].numpy()
     preds = stats["preds"].numpy()
 
+    split_label = args.split if args.split == "val" else f"{args.split} ({cfg['data']['test_dir']})"
     print(f"Checkpoint: {args.checkpoint}")
-    print(f"Split: {args.split} ({len(targets)} images) | TTA: {cfg['eval'].get('tta', 'none')}")
+    print(f"Split: {split_label} | {len(targets)} images | TTA: {cfg['eval'].get('tta', 'none')}")
     print(f"Accuracy:  {stats['acc']:.4f}")
     print(f"Top-5:     {stats['top5_acc']:.4f}")
     print(f"Loss:      {stats['loss']:.4f}")
@@ -164,6 +174,8 @@ def main() -> None:
         report = {
             "checkpoint": args.checkpoint,
             "split": args.split,
+            "test_dir": cfg["data"]["test_dir"] if args.split == "test" else None,
+            "num_images": int(len(targets)),
             "tta": cfg["eval"].get("tta", "none"),
             "accuracy": round(stats["acc"], 4),
             "top5_accuracy": round(stats["top5_acc"], 4),
