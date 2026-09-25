@@ -122,9 +122,18 @@ src/cnn_challenge/
   utils.py               Seeding, environment capture, checkpoint I/O
 train.py                 Training entry point
 evaluate.py              Checkpoint evaluation + per-class failure report
-scripts/prepare_data.py  Unpack the dataset archive into data/
-scripts/make_dummy_data.py  Synthetic dataset for pipeline verification
+predict.py               Inference on an unlabelled directory, writes a CSV
+scripts/
+  prepare_data.py        Unpack the dataset archive into data/ and verify counts
+  check_models.py        Builds all model/resolution/freeze combinations
+  make_dummy_data.py     Synthetic dataset for pipeline verification
+  make_report_table.py   Renders the experiment table from results.csv
+  pick_best_checkpoint.py  Ranks runs from history.jsonl, including unfinished ones
+  plot_history.py        Training curves for the report
 experiments/results/     One CSV row per run, written by train.py
+experiments/run_logs/    Per-run config, epoch history and summary for every run
+reports/REPORT.md        Source of the submitted two-page report
+reports/REPORT.pdf       The submitted report
 notebooks/               Colab driver notebook
 ```
 
@@ -197,8 +206,8 @@ all between adjacent scenes: Mountain 84% (→ OpenCountry), then Forest, Indust
 Kitchen at 92%, and LivingRoom, OpenCountry and Store at 96%. The two evaluated models
 fail *differently* — the ResNet-50's worst class was Kitchen at 76%, which ConvNeXt
 lifts to 92%, while Mountain drops from 88% to 84% — which suggests an ensemble rather
-than a larger model. Full breakdown in
-[`reports/test_report_best_seed1.json`](reports/test_report_best_seed1.json).
+than a larger model. `evaluate.py --report` regenerates the full per-class breakdown and
+confusion matrix from the checkpoint.
 
 Regenerate this table from the recorded runs at any time:
 

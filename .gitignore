@@ -27,6 +27,14 @@ env/
 .DS_Store
 Thumbs.db
 
+# Course handouts - kept locally, not redistributed here
+ITCS_6169_8169_Assignment1.pdf
+ITCS_6169_8169_Assignment1_2026_Starter.ipynb
+
+# Report build artifacts - REPORT.md is the source, REPORT.pdf is the deliverable
+reports/REPORT.html
+scripts/md_to_html.py
+
 # Keep the results we intentionally commit
 !experiments/results/*.csv
 !experiments/results/*.json
