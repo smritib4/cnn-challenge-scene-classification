@@ -90,6 +90,38 @@ def find_split_dirs(root: Path) -> dict[str, Path]:
     return found
 
 
+def find_flat_dirs(root: Path, split_dirs: set[Path]) -> dict[str, Path]:
+    """Find unlabelled image directories: loose images, no class subfolders.
+
+    This dataset's `test2` is 400 files named `image_0.jpg`..`image_399.jpg` with no
+    class structure, so it is a prediction set rather than a scoreable split. It is
+    staged locally alongside the real splits so `predict.py` does not have to read
+    across the Drive mount.
+    """
+    found: dict[str, Path] = {}
+    for candidate in sorted(p for p in root.iterdir() if p.is_dir()):
+        if candidate in split_dirs or not is_class_dir(candidate):
+            continue
+        # A split's class folders are also "class dirs"; only consider top-level
+        # directories that are not themselves inside a detected split.
+        if any(split_dir in candidate.parents for split_dir in split_dirs):
+            continue
+        found[candidate.name.lower()] = candidate
+    return found
+
+
+def copy_flat(src: Path, dest: Path) -> int:
+    if dest.exists():
+        shutil.rmtree(dest)
+    dest.mkdir(parents=True, exist_ok=True)
+    count = 0
+    for image in sorted(src.iterdir()):
+        if image.is_file() and is_image(image):
+            shutil.copy2(image, dest / image.name)
+            count += 1
+    return count
+
+
 def copy_split(src: Path, dest: Path) -> Counter:
     """Copy class folders into `dest`, returning per-class image counts."""
     if dest.exists():
@@ -188,6 +220,21 @@ def main() -> None:
             "The default config scores 'test'; select another with "
             "--set data.test_dir=<name>. Decide which split is the graded one before "
             "reporting a final number."
+        )
+
+    # Unlabelled prediction directories (this dataset's test2).
+    flat_dirs = find_flat_dirs(search_root, set(splits.values()))
+    for name, src in flat_dirs.items():
+        n_copied = copy_flat(src, out_root / name)
+        print(
+            f"\nUnlabelled image directory '{name}': {n_copied} images copied "
+            f"(no class subfolders, so it cannot be scored).\n"
+            f"  Generate a submission with:\n"
+            f"    python predict.py --checkpoint <ckpt> --images-dir {out_root / name} "
+            f"--out reports/{name}_predictions.csv\n"
+            f"  Check whether it duplicates a labelled split with:\n"
+            f"    python scripts/check_split_overlap.py --labelled {out_root / 'test'} "
+            f"--flat {out_root / name}"
         )
 
     if staging is not None and not args.keep_staging:

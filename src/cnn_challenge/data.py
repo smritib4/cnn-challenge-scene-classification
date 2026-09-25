@@ -17,19 +17,63 @@ Two details here are deliberate design decisions rather than boilerplate:
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, Subset
+from PIL import Image
+from torch.utils.data import DataLoader, Dataset, Subset
 from torchvision import datasets
 
 from .transforms import build_transforms
 from .utils import seed_worker
 
 IMG_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp")
+
+
+def natural_key(name: str) -> list[object]:
+    """Sort key that orders `image_2` before `image_10`.
+
+    Plain lexicographic sorting interleaves them (`image_10` before `image_2`),
+    which would silently misalign a predictions file against any externally
+    ordered ground truth.
+    """
+    return [int(chunk) if chunk.isdigit() else chunk.lower() for chunk in re.split(r"(\d+)", name)]
+
+
+class FlatImageDataset(Dataset):
+    """A directory of unlabelled images, as shipped in this dataset's `test2`.
+
+    `ImageFolder` cannot read it because there are no class subdirectories. Returns
+    `(tensor, filename)` so predictions can be written against the source names.
+    """
+
+    def __init__(self, root: str | Path, transform=None) -> None:
+        self.root = Path(root)
+        if not self.root.is_dir():
+            raise FileNotFoundError(f"Not a directory: {self.root}")
+        self.paths = sorted(
+            (p for p in self.root.iterdir() if p.is_file() and p.suffix.lower() in IMG_EXTENSIONS),
+            key=lambda p: natural_key(p.name),
+        )
+        if not self.paths:
+            raise FileNotFoundError(f"No images found in {self.root}")
+        self.transform = transform
+
+    def __len__(self) -> int:
+        return len(self.paths)
+
+    def __getitem__(self, index: int) -> tuple[Any, str]:
+        path = self.paths[index]
+        # Convert to RGB so grayscale source files still yield 3 channels; the
+        # transform pipeline handles any conversion back to 1 channel.
+        image = Image.open(path).convert("RGB")
+        if self.transform is not None:
+            image = self.transform(image)
+        return image, path.name
 
 
 def stratified_split(
