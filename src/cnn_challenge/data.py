@@ -17,6 +17,7 @@ Two details here are deliberate design decisions rather than boilerplate:
 
 from __future__ import annotations
 
+import os
 import re
 from collections import Counter
 from pathlib import Path
@@ -166,7 +167,10 @@ def build_loaders(cfg: dict[str, Any], bundle: dict[str, Any]) -> dict[str, Data
     """Wrap datasets in DataLoaders with reproducible shuffling."""
     data_cfg = cfg["data"]
     batch_size = int(data_cfg["batch_size"])
-    num_workers = int(data_cfg["num_workers"])
+    # Clamp to the machine's CPU count: Colab gives 2 vCPUs, and asking for more
+    # workers than cores adds contention rather than throughput.
+    available_cpus = os.cpu_count() or 1
+    num_workers = min(int(data_cfg["num_workers"]), available_cpus)
     pin_memory = torch.cuda.is_available()
     generator = torch.Generator()
     generator.manual_seed(int(cfg["experiment"]["seed"]))

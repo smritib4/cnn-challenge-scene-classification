@@ -23,15 +23,26 @@ class TNet(nn.Module):
     mid-level features scene recognition needs.
     """
 
-    def __init__(self, num_classes: int = 16, in_channels: int = 1) -> None:
+    def __init__(self, num_classes: int = 16, in_channels: int = 1, img_size: int = 64) -> None:
         super().__init__()
         self.features = nn.Sequential(
             nn.Conv2d(in_channels, 16, kernel_size=3),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=4, stride=4),
         )
-        # Lazily sized so the model works at any input resolution.
-        self.classifier = nn.Sequential(nn.Flatten(), nn.LazyLinear(num_classes))
+        # The flattened width is computed from img_size rather than inferred by a
+        # LazyLinear. Lazy parameters do not exist until the first forward pass, so
+        # anything that inspects the model beforehand - parameter counts, optimizer
+        # construction, checkpoint saving - fails on an uninitialised parameter.
+        # 3x3 conv without padding, then 4x4 max-pool with stride 4:
+        spatial = (img_size - 2) // 4
+        if spatial < 1:
+            raise ValueError(
+                f"img_size={img_size} is too small for TNet (needs at least 6 pixels)"
+            )
+        self.classifier = nn.Sequential(
+            nn.Flatten(), nn.Linear(16 * spatial * spatial, num_classes)
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.classifier(self.features(x))
@@ -177,7 +188,11 @@ def build_model(cfg: dict[str, Any], num_classes: int) -> nn.Module:
     in_channels = 1 if cfg["data"].get("grayscale", False) else 3
 
     if name == "tnet":
-        return TNet(num_classes=num_classes, in_channels=in_channels)
+        return TNet(
+            num_classes=num_classes,
+            in_channels=in_channels,
+            img_size=int(cfg["data"]["img_size"]),
+        )
     if name in {"smallcnn", "small_cnn"}:
         return SmallCNN(num_classes=num_classes, in_channels=in_channels, dropout=dropout)
 
