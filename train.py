@@ -68,16 +68,37 @@ def parse_args() -> argparse.Namespace:
 
 
 def append_result_row(row: dict[str, object], path: Path) -> None:
-    """Append one line per run to a CSV so the experiment table stays honest."""
+    """Append one line per run to a CSV so the experiment table stays honest.
+
+    Rewrites the file when the columns being written differ from the header already
+    on disk. Appending under a stale header silently shifts every value in the new
+    rows into the wrong columns, which is how an accuracy of 2354081600 once ended
+    up in the reported table.
+    """
     import csv
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    write_header = not path.exists()
-    with open(path, "a", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(row))
-        if write_header:
-            writer.writeheader()
+    existing: list[dict[str, str]] = []
+    header: list[str] = []
+    if path.exists():
+        with open(path, newline="", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            header = list(reader.fieldnames or [])
+            existing = list(reader)
+
+    if header == list(row):
+        with open(path, "a", newline="", encoding="utf-8") as handle:
+            csv.DictWriter(handle, fieldnames=header).writerow(row)
+        return
+
+    fieldnames = header + [k for k in row if k not in header]
+    with open(path, "w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, restval="")
+        writer.writeheader()
+        writer.writerows(existing)
         writer.writerow(row)
+    if header:
+        print(f"Migrated {path.name} to {len(fieldnames)} columns (was {len(header)}).")
 
 
 def main() -> None:
