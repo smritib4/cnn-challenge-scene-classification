@@ -19,20 +19,18 @@ the top five.
 
 **Validation strategy.** The 2,400 training images were split 80/20 into 1,920 train
 and 480 validation images with a **stratified** split at a fixed seed, giving exactly
-30 validation images per class. Every architecture and hyperparameter decision was
-made on validation accuracy alone, using a rule fixed in advance: take the highest
-validation accuracy among runs that *completed*. Stratification was not cosmetic —
-reproducing the starter's unstratified `random_split` gives per-class train counts from
-115 to 124, and on 480 validation images 1% is five images, so an unbalanced split
-injects noise as large as the effects being measured, and being fixed by the seed it
-biases every experiment the same way instead of averaging out.
+30 validation images per class. Every decision was made on validation accuracy alone,
+under a rule fixed in advance: highest validation accuracy among runs that *completed*.
+Stratification was not cosmetic — the starter's unstratified `random_split` gives
+per-class train counts from 115 to 124, and on 480 validation images 1% is five images,
+so an unbalanced split injects noise as large as the effects being measured, and being
+fixed by the seed it biases every experiment the same way instead of averaging out.
 
-**Test-set discipline, stated plainly.** The test set was scored twice, on two
-already-selected checkpoints, and both numbers are reported here: the fine-tuned
-ResNet-50 scored **94.25%** and the ConvNeXt-Tiny model above scored **96.75%**. The
-ResNet-50 was evaluated first, while a fault in my results logging (§4) hid the
-ConvNeXt run from the selection step. Neither evaluation was used to choose
-hyperparameters, and I am reporting both rather than only the better one.
+**Test-set discipline.** The test set was scored twice, on two already-selected
+checkpoints, and both are reported: the fine-tuned ResNet-50 scored **94.25%** and the
+ConvNeXt-Tiny above scored **96.75%**. The ResNet-50 went first because a fault in my
+results logging (§4) hid the ConvNeXt run from the selection step. Neither number
+influenced any hyperparameter choice.
 
 ## 2. Secret Recipe
 
@@ -151,20 +149,15 @@ It also produced a throwaway script that zlib-decompressed the assignment PDF's 
 streams to recover the dataset link, which plain text extraction missed.
 
 **Where my judgement was required.** Asked to fetch the dataset, it started a
-`gdown --folder` crawl pulling images one HTTP request at a time. The code *worked* —
-and would have taken two hours with rate-limiting risk. I killed it and fetched the
-folder as one archive, keeping reproducibility in `scripts/prepare_data.py`, which
-unpacks whatever archive you have and then *verifies* it: per-class counts, class names
-matching across splits, and a warning if the training total is not 2,400. I also
-rejected the `random_split` that the starter uses and that generated code reproduces by
-default, for the measurement reasons in §1. The recurring pattern: an assistant
-optimises for "the code runs", which is not "this is the right approach."
+`gdown --folder` crawl pulling images one request at a time. The code *worked* — and
+would have taken two hours with rate-limiting risk. I killed it, fetched the folder as
+one archive, and put reproducibility in `scripts/prepare_data.py`, which unpacks
+whatever archive you have and then *verifies* it: per-class counts, class names matching
+across splits, a warning if the training total is not 2,400. I also rejected the
+`random_split` the starter uses, and that generated code reproduces by default, for the
+measurement reasons in §1. The recurring pattern: an assistant optimises for "the code
+runs", which is not "this is the right approach."
 
 Full detail, including three further cases where suggestions were wrong, is in
-`AI_USAGE.md`.
-
----
-
-*References:* He et al., *Deep Residual Learning*, CVPR 2016 · Liu et al., *A ConvNet
-for the 2020s*, CVPR 2022 · Cubuk et al., *RandAugment*, NeurIPS 2020 · Loshchilov &
-Hutter, *Decoupled Weight Decay Regularization*, ICLR 2019.
+`AI_USAGE.md`. *References:* He et al. CVPR 2016 · Liu et al. CVPR 2022 · Cubuk et al.
+NeurIPS 2020 · Loshchilov & Hutter ICLR 2019.
