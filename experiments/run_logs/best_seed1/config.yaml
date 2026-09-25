@@ -1,0 +1,69 @@
+experiment:
+  name: best
+  notes: Final submitted recipe. ConvNeXt-Tiny, ImageNet-1k pretrained, fully fine-tuned.
+  seed: 1
+  config_path: configs/best.yaml
+data:
+  root: data
+  train_dir: train
+  test_dir: test
+  val_fraction: 0.2
+  split: stratified
+  batch_size: 32
+  num_workers: 4
+  img_size: 224
+  grayscale: false
+  mean:
+  - 0.485
+  - 0.456
+  - 0.406
+  std:
+  - 0.229
+  - 0.224
+  - 0.225
+augment:
+  preset: strong
+  random_resized_crop: true
+  crop_scale:
+  - 0.65
+  - 1.0
+  hflip: 0.5
+  rand_augment:
+    enabled: false
+    num_ops: 2
+    magnitude: 9
+  color_jitter: 0.0
+  random_erasing: 0.0
+  mixup_alpha: 0.0
+  cutmix_alpha: 0.0
+  mix_prob: 0.5
+model:
+  name: convnext_tiny
+  pretrained: true
+  dropout: 0.0
+  freeze: none
+optim:
+  optimizer: adamw
+  lr: 0.0001
+  head_lr_mult: 10.0
+  weight_decay: 0.05
+  momentum: 0.9
+  nesterov: true
+  scheduler: cosine
+  warmup_epochs: 3
+  min_lr: 1.0e-06
+  epochs: 40
+  grad_clip: 1.0
+  label_smoothing: 0.1
+  amp: true
+  ema:
+    enabled: true
+    decay: 0.999
+  early_stopping_patience: 0
+eval:
+  tta: hflip
+  monitor: val_acc
+output:
+  root: runs
+  save_best: true
+  save_last: false

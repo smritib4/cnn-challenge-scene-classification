@@ -1,0 +1,28 @@
+{
+  "experiment": "04_resnet18_finetune",
+  "seed": 0,
+  "model": "resnet18",
+  "pretrained": true,
+  "img_size": 224,
+  "augment_preset": "basic",
+  "epochs": 30,
+  "trainable_params": 11184720,
+  "best_epoch": 16,
+  "best_used_ema": false,
+  "val_acc": 0.9396,
+  "val_top5": 0.9937,
+  "val_loss": 0.3056,
+  "train_time_s": 274.7,
+  "environment": {
+    "timestamp": "2026-09-25T14:25:33",
+    "python": "3.13.15",
+    "platform": "Linux-6.6.122+-x86_64-with-glibc2.39",
+    "torch": "2.11.0+cu128",
+    "cuda_available": true,
+    "cuda_version": "12.8",
+    "torchvision": "0.26.0+cu128",
+    "gpu": "Tesla T4",
+    "git_commit": "1590aec"
+  },
+  "checkpoint": "runs/04_resnet18_finetune_seed0/best.pt"
+}

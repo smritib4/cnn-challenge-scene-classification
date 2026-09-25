@@ -1,0 +1,30 @@
+{
+  "experiment": "07_resnet50_mixup",
+  "seed": 0,
+  "model": "resnet50",
+  "pretrained": true,
+  "img_size": 224,
+  "augment_preset": "strong",
+  "epochs": 60,
+  "trainable_params": 23540816,
+  "best_epoch": 0,
+  "best_used_ema": false,
+  "epochs_completed": 0,
+  "interrupted": true,
+  "val_acc": 0.1042,
+  "val_top5": 0.3125,
+  "val_loss": 2.7932,
+  "train_time_s": 13.4,
+  "environment": {
+    "timestamp": "2026-09-25T15:11:52",
+    "python": "3.13.15",
+    "platform": "Linux-6.6.122+-x86_64-with-glibc2.39",
+    "torch": "2.11.0+cu128",
+    "cuda_available": true,
+    "cuda_version": "12.8",
+    "torchvision": "0.26.0+cu128",
+    "gpu": "Tesla T4",
+    "git_commit": "dcd261f"
+  },
+  "checkpoint": "runs/07_resnet50_mixup_seed0/best.pt"
+}

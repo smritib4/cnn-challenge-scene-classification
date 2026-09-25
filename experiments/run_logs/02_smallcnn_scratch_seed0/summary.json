@@ -1,0 +1,30 @@
+{
+  "experiment": "02_smallcnn_scratch",
+  "seed": 0,
+  "model": "smallcnn",
+  "pretrained": false,
+  "img_size": 128,
+  "augment_preset": "basic",
+  "epochs": 60,
+  "trainable_params": 4695504,
+  "best_epoch": 54,
+  "best_used_ema": false,
+  "epochs_completed": 60,
+  "interrupted": false,
+  "val_acc": 0.8938,
+  "val_top5": 0.9917,
+  "val_loss": 0.3244,
+  "train_time_s": 404.1,
+  "environment": {
+    "timestamp": "2026-09-25T14:56:43",
+    "python": "3.13.15",
+    "platform": "Linux-6.6.122+-x86_64-with-glibc2.39",
+    "torch": "2.11.0+cu128",
+    "cuda_available": true,
+    "cuda_version": "12.8",
+    "torchvision": "0.26.0+cu128",
+    "gpu": "Tesla T4",
+    "git_commit": "dcd261f"
+  },
+  "checkpoint": "runs/02_smallcnn_scratch_seed0/best.pt"
+}

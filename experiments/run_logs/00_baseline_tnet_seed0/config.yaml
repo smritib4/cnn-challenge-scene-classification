@@ -1,0 +1,68 @@
+experiment:
+  name: 00_baseline_tnet
+  notes: 'Verbatim reproduction of the provided starter. Uses the unstratified random_split
+    so the number is directly comparable to the notebook.
+
+    '
+  seed: 0
+  config_path: configs/00_baseline_tnet.yaml
+data:
+  root: data
+  train_dir: train
+  test_dir: test
+  val_fraction: 0.2
+  split: random
+  batch_size: 64
+  num_workers: 4
+  img_size: 64
+  grayscale: true
+  mean:
+  - 0.5
+  std:
+  - 0.5
+augment:
+  preset: none
+  random_resized_crop: true
+  crop_scale:
+  - 0.65
+  - 1.0
+  hflip: 0.5
+  rand_augment:
+    enabled: false
+    num_ops: 2
+    magnitude: 9
+  color_jitter: 0.0
+  random_erasing: 0.0
+  mixup_alpha: 0.0
+  cutmix_alpha: 0.0
+  mix_prob: 0.5
+model:
+  name: tnet
+  pretrained: false
+  dropout: 0.0
+  freeze: none
+optim:
+  optimizer: adam
+  lr: 0.002
+  head_lr_mult: 1.0
+  weight_decay: 0.0
+  momentum: 0.9
+  nesterov: true
+  scheduler: none
+  warmup_epochs: 0
+  min_lr: 1.0e-06
+  epochs: 20
+  grad_clip: 0.0
+  label_smoothing: 0.0
+  amp: false
+  ema:
+    enabled: false
+    decay: 0.999
+  early_stopping_patience: 0
+eval:
+  tta: none
+  monitor: val_acc
+output:
+  root: runs
+  save_best: true
+  save_last: false

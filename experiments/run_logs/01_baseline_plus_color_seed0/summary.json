@@ -1,0 +1,28 @@
+{
+  "experiment": "01_baseline_plus_color",
+  "seed": 0,
+  "model": "tnet",
+  "pretrained": false,
+  "img_size": 128,
+  "augment_preset": "none",
+  "epochs": 20,
+  "trainable_params": 246480,
+  "best_epoch": 20,
+  "best_used_ema": false,
+  "val_acc": 0.5813,
+  "val_top5": 0.8979,
+  "val_loss": 1.4768,
+  "train_time_s": 99.2,
+  "environment": {
+    "timestamp": "2026-09-25T14:20:58",
+    "python": "3.13.15",
+    "platform": "Linux-6.6.122+-x86_64-with-glibc2.39",
+    "torch": "2.11.0+cu128",
+    "cuda_available": true,
+    "cuda_version": "12.8",
+    "torchvision": "0.26.0+cu128",
+    "gpu": "Tesla T4",
+    "git_commit": "1590aec"
+  },
+  "checkpoint": "runs/01_baseline_plus_color_seed0/best.pt"
+}
