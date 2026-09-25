@@ -47,7 +47,9 @@ that was selected, not because I have evidence they helped.
 
 ## 3. Experimental Journey
 
-Two numbers means I ran the same config twice at the same seed.
+Accuracies here are **validation**, which is what selection used; two numbers means I ran
+that config twice at the same seed. Only the two selected checkpoints were scored on the
+test set: 94.25% for experiment 5, **96.75%** for the final model.
 
 | # | Experiment | Change | Params | Val acc (%) |
 |---|---|---|---:|---:|
@@ -59,10 +61,6 @@ Two numbers means I ran the same config twice at the same seed.
 | 05 | ResNet-50 fine-tuned | model size | 23.5M | 95.21 |
 | 06 | + strong augmentation | augmentation only | 23.5M | 94.38 |
 | — | **Final: ConvNeXt-Tiny** | family + EMA + flip TTA | 27.8M | **95.63** |
-
-Every number in that column is **validation** accuracy, since that is what selection
-used. Only the two selected checkpoints were scored on the test set: experiment 5 got
-94.25%, and the final model got **96.75%**.
 
 **The most useful thing I measured was my own noise floor.** Running one config twice at
 the *same* seed gave 94.58% and 93.96% — 0.62 points apart, or 3 of 480 images. Same-seed
@@ -87,9 +85,8 @@ of overfitting augmentation fixes. The pretrained features were already close to
 so the useful part of training finished in two epochs and the rest was the head fitting
 noise. Augmenting pixels cannot help when the problem was never a lack of image variety.
 The loss curves would have told me first: training loss had already flattened at 0.568,
-essentially the floor label smoothing imposes, so the model was not struggling with the
-objective at all. My real mistake was ordering — I ran the comparison before measuring
-the noise floor, so a 0.62-point wobble looked like a trend.
+essentially the floor label smoothing imposes. My real mistake was ordering — I ran the
+comparison before measuring the noise floor, so a 0.62-point wobble looked like a trend.
 
 ## 5. AI + Human
 
@@ -102,6 +99,6 @@ recover the dataset link, which normal text extraction had missed.
 crawl fetching images one request at a time. The code ran fine, which is the problem: it
 was on track to take two hours. I stopped it, downloaded the folder as one archive, and
 put the reproducibility into `scripts/prepare_data.py`, which unpacks the archive and then
-*checks* it: per-class counts, class names matching across splits, and a warning if the
-training total is not 2,400. I also refused the `random_split` the starter uses and the AI
-reproduced by default, for the reasons in section 1. Further cases are in `AI_USAGE.md`.
+*checks* it: per-class counts, matching class names across splits, and a warning if the
+total is not 2,400. I also refused the `random_split` the starter uses and the AI
+reproduced by default, for the reasons in section 1. More cases are in `AI_USAGE.md`.
